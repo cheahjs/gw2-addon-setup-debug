@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"crypto/md5"
+	"encoding/hex"
 
 	"github.com/pkg/errors"
 	peparser "github.com/saferwall/pe"
@@ -20,8 +22,10 @@ var (
 )
 
 type dllInfo struct {
-	isArc              bool
-	isArcAddon         bool
+	filePath           string
+	md5sum			   string
+	isArcdps           bool
+	isArcdpsAddon      bool
 	isAddonLoaderShim  bool
 	isAddonLoaderCore  bool
 	isAddonLoaderAddon bool
@@ -32,14 +36,16 @@ type dllInfo struct {
 	fileVersion        WinVersion
 }
 
-func (info dllInfo) String() string {
-	return fmt.Sprintf("isArc: %v, isArcAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, fileVersion: %v",
-		info.isArc, info.isArcAddon, info.isAddonLoaderShim, info.isAddonLoaderCore, info.isAddonLoaderAddon, info.isNexus, info.isNexusAddon, info.isD3D11Shim, info.isDXGIShim, info.fileVersion)
+func (info *dllInfo) String() string {
+	return fmt.Sprintf("md5sum: %v, isArcdps: %v, isArcdpsAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, fileVersion: %v",
+		info.md5sum, info.isArcdps, info.isArcdpsAddon, info.isAddonLoaderShim, info.isAddonLoaderCore, info.isAddonLoaderAddon, info.isNexus, info.isNexusAddon, info.isD3D11Shim, info.isDXGIShim, info.fileVersion)
 }
 
 // parseDll parses a DLL and returns information about the DLL
 func parseDll(logger *zap.SugaredLogger, dllPath string) (*dllInfo, error) {
-	var info dllInfo
+	info := &dllInfo{
+		filePath: dllPath,
+	}
 	// Parse PE file
 	peFile, err := peparser.New(dllPath, &peparser.Options{})
 	if err != nil {
@@ -55,8 +61,14 @@ func parseDll(logger *zap.SugaredLogger, dllPath string) (*dllInfo, error) {
 		return nil, errors.Wrapf(err, "failed to read file %s", dllPath)
 	}
 
+	// Get file version if available
 	if winVersion, err := GetFileVersion(dllPath); err == nil {
 		info.fileVersion = winVersion
+	}
+
+	// Get MD5 sum
+	if md5sum, err := GetMD5Sum(fileBytes); err == nil {
+		info.md5sum = md5sum
 	}
 
 	// Check if the DLL is a D3D11 shim
@@ -69,14 +81,14 @@ func parseDll(logger *zap.SugaredLogger, dllPath string) (*dllInfo, error) {
 		info.isDXGIShim = true
 	}
 
-	// Check if the DLL is an ARC file
-	if isArc(peFile) {
-		info.isArc = true
+	// Check if the DLL is arcdps
+	if isArcdps(peFile) {
+		info.isArcdps = true
 	}
 
-	// Check if the DLL is an ARC addon
-	if isArcAddon(peFile) {
-		info.isArcAddon = true
+	// Check if the DLL is an arcdps addon
+	if isArcdpsAddon(peFile) {
+		info.isArcdpsAddon = true
 	}
 
 	// Check if the DLL is an addon loader shim
@@ -104,10 +116,10 @@ func parseDll(logger *zap.SugaredLogger, dllPath string) (*dllInfo, error) {
 		info.isNexusAddon = true
 	}
 
-	return &info, nil
+	return info, nil
 }
 
-func isArc(peFile *peparser.File) bool {
+func isArcdps(peFile *peparser.File) bool {
 	// Check for e0
 	for _, export := range peFile.Export.Functions {
 		if export.Name == "e0" {
@@ -117,7 +129,7 @@ func isArc(peFile *peparser.File) bool {
 	return false
 }
 
-func isArcAddon(peFile *peparser.File) bool {
+func isArcdpsAddon(peFile *peparser.File) bool {
 	// Check for get_init_addr
 	for _, export := range peFile.Export.Functions {
 		if export.Name == "get_init_addr" {
@@ -203,4 +215,15 @@ func asciiToWideString(s string) []byte {
 		b[i*2+1] = 0
 	}
 	return b
+}
+
+// GetMD5Sum calculates the MD5 checksum of the given data and returns it as a hexadecimal string.
+func GetMD5Sum(data []byte) (string, error) {
+	hash := md5.New()
+	_, err := hash.Write(data)
+	if err != nil {
+		return "", err
+	}
+	checksum := hash.Sum(nil)
+	return hex.EncodeToString(checksum), nil
 }
