@@ -73,6 +73,11 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 			layout.Spacer{Height: 10}.Layout,
 		),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			paragraph := material.Body1(th, r.getWarningFlags())
+			paragraph.Color = color.NRGBA{R: 200, A: 255}
+			return paragraph.Layout(gtx)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			var summary strings.Builder
 
 			// Add GW2 directory info
@@ -160,6 +165,20 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 		}))
 
 	return false
+}
+
+func (r *Report) getWarningFlags() string {
+	var flags strings.Builder
+
+	// Check if the path the user provided is different from the path to the GW2 executable
+	executablePath := filepath.Dir(r.processInfo.ExecutablePath)
+	if r.gw2Dir != executablePath {
+		flags.WriteString("GW2 Directory Mismatch - GW2 is running from a different directory than the one you provided\n")
+		flags.WriteString(fmt.Sprintf("  User provided: %s\n", r.gw2Dir))
+		flags.WriteString(fmt.Sprintf("  Executable path: %s\n", executablePath))
+	}
+
+	return flags.String()
 }
 
 func (r *Report) saveReport() {
@@ -258,7 +277,7 @@ func (r *Report) saveReport() {
 		report.WriteString("=== GW2 Process Information ===\n")
 		report.WriteString(fmt.Sprintf("Process ID: %d\n", r.processInfo.ProcessID))
 		report.WriteString(fmt.Sprintf("Executable Path: %s\n", r.processInfo.ExecutablePath))
-		report.WriteString(fmt.Sprintf("Working Directory: %s\n", r.processInfo.CommandLine))
+		report.WriteString(fmt.Sprintf("Working Directory: %s\n", r.processInfo.WorkingDir))
 		report.WriteString(fmt.Sprintf("Command Line: %s\n", r.processInfo.CommandLine))
 		report.WriteString(fmt.Sprintf("Captured At: %s\n\n", r.processInfo.Timestamp.Format(time.RFC1123)))
 
