@@ -30,6 +30,7 @@ type Report struct {
 	reportSaved  bool
 	saveLocation string
 	errorMessage string
+	list         *layout.List
 }
 
 func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo) *Report {
@@ -40,6 +41,7 @@ func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllIn
 		gw2Dir:      gw2Dir,
 		dllInfos:    dllInfos,
 		processInfo: processInfo,
+		list:        &layout.List{Axis: layout.Vertical},
 	}
 }
 
@@ -54,115 +56,127 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 		return true
 	}
 
-	layout.Flex{
-		Axis: layout.Vertical,
-	}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			paragraph := material.Body1(th, "Debug Report Generated")
-			paragraph.Alignment = text.Middle
-			return paragraph.Layout(gtx)
-		}),
-		layout.Rigid(
-			layout.Spacer{Height: 20}.Layout,
-		),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			paragraph := material.Body1(th, "Summary of findings:")
-			return paragraph.Layout(gtx)
-		}),
-		layout.Rigid(
-			layout.Spacer{Height: 10}.Layout,
-		),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			paragraph := material.Body1(th, r.getWarningFlags())
-			paragraph.Color = color.NRGBA{R: 200, A: 255}
-			return paragraph.Layout(gtx)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			var summary strings.Builder
-
-			// Add GW2 directory info
-			summary.WriteString(fmt.Sprintf("- GW2 Directory: %s\n", r.gw2Dir))
-
-			// Add DLL info
-			summary.WriteString(fmt.Sprintf("- Found %d DLLs in directory\n", len(r.dllInfos)))
-			var arcdpsCount, addonLoaderCount, nexusCount, arcdpsAddonCount, addonLoaderAddonCount, nexusAddonCount int
-			for _, dll := range r.dllInfos {
-				if dll.IsArcdps {
-					arcdpsCount++
-				}
-				if dll.IsAddonLoaderShim || dll.IsAddonLoaderCore {
-					addonLoaderCount++
-				}
-				if dll.IsNexus {
-					nexusCount++
-				}
-				if dll.IsArcdpsAddon {
-					arcdpsAddonCount++
-				}
-				if dll.IsAddonLoaderAddon {
-					addonLoaderAddonCount++
-				}
-				if dll.IsNexusAddon {
-					nexusAddonCount++
-				}
-			}
-			summary.WriteString(fmt.Sprintf("  - ArcDPS: %d\n", arcdpsCount))
-			summary.WriteString(fmt.Sprintf("  - ArcDPS Addon: %d\n", arcdpsAddonCount))
-			summary.WriteString(fmt.Sprintf("  - AddonLoader: %d\n", addonLoaderCount))
-			summary.WriteString(fmt.Sprintf("  - AddonLoader Addon: %d\n", addonLoaderAddonCount))
-			summary.WriteString(fmt.Sprintf("  - Nexus: %d\n", nexusCount))
-			summary.WriteString(fmt.Sprintf("  - Nexus Addon: %d\n", nexusAddonCount))
-
-			// Add process info
-			if r.processInfo != nil {
-				summary.WriteString(fmt.Sprintf("- GW2 Process Info:\n"))
-				summary.WriteString(fmt.Sprintf("  - Executable: %s\n", filepath.Base(r.processInfo.ExecutablePath)))
-				summary.WriteString(fmt.Sprintf("  - Working Directory: %s\n", r.processInfo.WorkingDir))
-				summary.WriteString(fmt.Sprintf("  - Loaded modules: %d\n", len(r.processInfo.LoadedModules)))
-			} else {
-				summary.WriteString("- No GW2 process info captured\n")
-			}
-
-			paragraph := material.Body1(th, summary.String())
-			return paragraph.Layout(gtx)
-		}),
-		layout.Rigid(
-			layout.Spacer{Height: 20}.Layout,
-		),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			if r.reportSaved {
-				paragraph := material.Body1(th, fmt.Sprintf("Report saved to: %s", r.saveLocation))
+	r.list.Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
+		return layout.Flex{
+			Axis: layout.Vertical,
+		}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				paragraph := material.Body1(th, "Debug Report Generated")
+				paragraph.Alignment = text.Middle
 				return paragraph.Layout(gtx)
-			}
-			return layout.Dimensions{}
-		}),
-		layout.Rigid(
-			layout.Spacer{Height: 10}.Layout,
-		),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			if r.errorMessage != "" {
-				paragraph := material.Body1(th, r.errorMessage)
+			}),
+			layout.Rigid(
+				layout.Spacer{Height: 20}.Layout,
+			),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				paragraph := material.Body1(th, "Summary of findings:")
 				return paragraph.Layout(gtx)
-			}
-			return layout.Dimensions{}
-		}),
-		layout.Rigid(
-			layout.Spacer{Height: 20}.Layout,
-		),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			btn := material.Button(th, &r.saveButton, "Save Report")
-			if r.reportSaved {
-				btn.Background = color.NRGBA{R: 150, G: 150, B: 150, A: 255}
-			}
-			return btn.Layout(gtx)
-		}),
-		layout.Rigid(
-			layout.Spacer{Height: 10}.Layout,
-		),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			btn := material.Button(th, &r.exitButton, "Exit")
-			return btn.Layout(gtx)
-		}))
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				paragraph := material.Body1(th, r.getWarningFlags())
+				paragraph.Color = color.NRGBA{R: 200, A: 255}
+				return paragraph.Layout(gtx)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				var summary strings.Builder
+
+				// Add GW2 directory info
+				summary.WriteString(fmt.Sprintf("- GW2 Directory: %s\n", r.gw2Dir))
+
+				// Add DLL info
+				summary.WriteString(fmt.Sprintf("- Found %d DLLs in directory\n", len(r.dllInfos)))
+				var arcdpsCount, addonLoaderCount, nexusCount, arcdpsAddonCount, addonLoaderAddonCount, nexusAddonCount int
+				for _, dll := range r.dllInfos {
+					if dll.IsArcdps {
+						arcdpsCount++
+					}
+					if dll.IsAddonLoaderShim || dll.IsAddonLoaderCore {
+						addonLoaderCount++
+					}
+					if dll.IsNexus {
+						nexusCount++
+					}
+					if dll.IsArcdpsAddon {
+						arcdpsAddonCount++
+					}
+					if dll.IsAddonLoaderAddon {
+						addonLoaderAddonCount++
+					}
+					if dll.IsNexusAddon {
+						nexusAddonCount++
+					}
+				}
+				summary.WriteString(fmt.Sprintf("  - ArcDPS: %d\n", arcdpsCount))
+				summary.WriteString(fmt.Sprintf("  - ArcDPS Addon: %d\n", arcdpsAddonCount))
+				summary.WriteString(fmt.Sprintf("  - AddonLoader: %d\n", addonLoaderCount))
+				summary.WriteString(fmt.Sprintf("  - AddonLoader Addon: %d\n", addonLoaderAddonCount))
+				summary.WriteString(fmt.Sprintf("  - Nexus: %d\n", nexusCount))
+				summary.WriteString(fmt.Sprintf("  - Nexus Addon: %d\n", nexusAddonCount))
+
+				// Add process info
+				if r.processInfo != nil {
+					summary.WriteString(fmt.Sprintf("- GW2 Process Info:\n"))
+					summary.WriteString(fmt.Sprintf("  - Executable: %s\n", r.processInfo.ExecutablePath))
+					summary.WriteString(fmt.Sprintf("  - Working Directory: %s\n", r.processInfo.WorkingDir))
+					summary.WriteString(fmt.Sprintf("  - Loaded modules: %d\n", len(r.processInfo.LoadedModules)))
+					// Write the active shims (d3d11.dll, dxgi.dll, bin64/dxgi.dll)
+					summary.WriteString(fmt.Sprintf("  - Active shims:\n"))
+					executablePath := filepath.Dir(r.processInfo.ExecutablePath)
+					for _, module := range r.processInfo.LoadedModules {
+						// lowercase the module name
+						moduleName := strings.ToLower(module.ModuleName)
+						if moduleName == filepath.Join(executablePath, "d3d11.dll") ||
+							moduleName == filepath.Join(executablePath, "dxgi.dll") ||
+							moduleName == filepath.Join(executablePath, "bin64", "dxgi.dll") {
+							summary.WriteString(fmt.Sprintf("    - %s\n", module.ModuleName))
+						}
+					}
+				} else {
+					summary.WriteString("- No GW2 process info captured\n")
+				}
+
+				paragraph := material.Body1(th, summary.String())
+				return paragraph.Layout(gtx)
+			}),
+			layout.Rigid(
+				layout.Spacer{Height: 20}.Layout,
+			),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				if r.reportSaved {
+					paragraph := material.Body1(th, fmt.Sprintf("Report saved to: %s", r.saveLocation))
+					return paragraph.Layout(gtx)
+				}
+				return layout.Dimensions{}
+			}),
+			layout.Rigid(
+				layout.Spacer{Height: 10}.Layout,
+			),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				if r.errorMessage != "" {
+					paragraph := material.Body1(th, r.errorMessage)
+					return paragraph.Layout(gtx)
+				}
+				return layout.Dimensions{}
+			}),
+			layout.Rigid(
+				layout.Spacer{Height: 20}.Layout,
+			),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				btn := material.Button(th, &r.saveButton, "Save Report")
+				if r.reportSaved {
+					btn.Background = color.NRGBA{R: 150, G: 150, B: 150, A: 255}
+				}
+				return btn.Layout(gtx)
+			}),
+			layout.Rigid(
+				layout.Spacer{Height: 10}.Layout,
+			),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				btn := material.Button(th, &r.exitButton, "Exit")
+				return btn.Layout(gtx)
+			}),
+		)
+	})
 
 	return false
 }
@@ -171,11 +185,13 @@ func (r *Report) getWarningFlags() string {
 	var flags strings.Builder
 
 	// Check if the path the user provided is different from the path to the GW2 executable
-	executablePath := filepath.Dir(r.processInfo.ExecutablePath)
-	if r.gw2Dir != executablePath {
-		flags.WriteString("GW2 Directory Mismatch - GW2 is running from a different directory than the one you provided\n")
-		flags.WriteString(fmt.Sprintf("  User provided: %s\n", r.gw2Dir))
-		flags.WriteString(fmt.Sprintf("  Executable path: %s\n", executablePath))
+	if r.processInfo != nil {
+		executablePath := filepath.Dir(r.processInfo.ExecutablePath)
+		if r.gw2Dir != executablePath {
+			flags.WriteString("GW2 Directory Mismatch - GW2 is running from a different directory than the one you provided\n")
+			flags.WriteString(fmt.Sprintf("  User provided: %s\n", r.gw2Dir))
+			flags.WriteString(fmt.Sprintf("  Executable path: %s\n", executablePath))
+		}
 	}
 
 	return flags.String()
@@ -228,7 +244,21 @@ func (r *Report) saveReport() {
 	})
 
 	for i, dll := range r.dllInfos {
-		report.WriteString(fmt.Sprintf("DLL #%d: %s\n", i+1, filepath.Base(dll.FilePath)))
+		report.WriteString(fmt.Sprintf("DLL #%d: %s", i+1, filepath.Base(dll.FilePath)))
+		if r.processInfo != nil {
+			// Check if the dll is loaded by the GW2 process
+			found := false
+			for _, module := range r.processInfo.LoadedModules {
+				if module.ModuleName == dll.FilePath {
+					found = true
+					break
+				}
+			}
+			if found {
+				report.WriteString(" (Loaded)")
+			}
+		}
+		report.WriteString("\n")
 		// Add a header with all the flags
 		var flags strings.Builder
 		if dll.IsNexus {
