@@ -19,6 +19,8 @@ jobs:
         run: go get .
 
       - name: Build
+        env:
+          GOARCH: amd64
         run: go build -ldflags -H=windowsgui -o gw2-addon-setup-debug.exe
 
       - name: Upload build
