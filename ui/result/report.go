@@ -3,6 +3,7 @@ package result
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,7 +15,6 @@ import (
 	"gioui.org/text"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
-	"github.com/cheahjs/gw2-addon-setup-debug/ui/process_modules"
 	"github.com/cheahjs/gw2-addon-setup-debug/utils"
 	"go.uber.org/zap"
 )
@@ -25,13 +25,13 @@ type Report struct {
 	exitButton   widget.Clickable
 	gw2Dir       string
 	dllInfos     []*utils.DllInfo
-	processInfo  *process_modules.ProcessInfo
+	processInfo  *utils.ProcessInfo
 	reportSaved  bool
 	saveLocation string
 	errorMessage string
 }
 
-func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *process_modules.ProcessInfo) *Report {
+func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo) *Report {
 	return &Report{
 		logger:      logger,
 		saveButton:  widget.Clickable{},
@@ -182,7 +182,7 @@ func (r *Report) saveReport() {
 			report.WriteString(fmt.Sprintf("  Error: %s\n", dll.Error))
 		} else {
 			report.WriteString(fmt.Sprintf("  MD5: %s\n", dll.Md5sum))
-			report.WriteString(fmt.Sprintf("  Version: %s\n", dll.FileVersion))
+			report.WriteString(fmt.Sprintf("  Version: %d.%d.%d.%d\n", dll.FileVersion.Major, dll.FileVersion.Minor, dll.FileVersion.Patch, dll.FileVersion.Build))
 			report.WriteString(fmt.Sprintf("  IsArcdps: %v\n", dll.IsArcdps))
 			report.WriteString(fmt.Sprintf("  IsArcdpsAddon: %v\n", dll.IsArcdpsAddon))
 			report.WriteString(fmt.Sprintf("  IsAddonLoaderShim: %v\n", dll.IsAddonLoaderShim))
@@ -207,7 +207,7 @@ func (r *Report) saveReport() {
 
 		report.WriteString(fmt.Sprintf("=== Loaded Modules (%d total) ===\n", len(r.processInfo.LoadedModules)))
 		for i, module := range r.processInfo.LoadedModules {
-			report.WriteString(fmt.Sprintf("%d. %s\n", i+1, module))
+			report.WriteString(fmt.Sprintf("%d. %s (0x%x) - %d bytes\n", i+1, module.ModuleName, module.BaseAddress, module.ModuleSize))
 		}
 	} else {
 		report.WriteString("=== GW2 Process Information ===\n")
@@ -231,4 +231,10 @@ func (r *Report) saveReport() {
 	r.saveLocation = absPath
 	r.reportSaved = true
 	r.logger.Infow("Report saved", "path", absPath)
+
+	// Open the folder containing the report
+	err = exec.Command("explorer", "/select,", absPath).Run()
+	if err != nil {
+		r.logger.Errorw("Failed to open report folder", "error", err)
+	}
 }

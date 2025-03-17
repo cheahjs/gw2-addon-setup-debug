@@ -11,17 +11,9 @@ import (
 	"gioui.org/text"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"github.com/cheahjs/gw2-addon-setup-debug/utils"
 	"go.uber.org/zap"
 )
-
-type ProcessInfo struct {
-	ProcessID      uint32
-	ExecutablePath string
-	LoadedModules  []string
-	WorkingDir     string
-	CommandLine    string
-	Timestamp      time.Time
-}
 
 type Monitor struct {
 	logger              *zap.SugaredLogger
@@ -34,25 +26,28 @@ type Monitor struct {
 	userSkipped         bool
 	status              string
 	errorMessage        string
-	processInfo         *ProcessInfo
+	processInfo         *utils.ProcessInfo
 	startMonitoringTime time.Time
 	gw2ProcessFound     bool
 	window              *app.Window
-	findProcessFunc     func() (*ProcessInfo, error)
-	tempProcessInfo     *ProcessInfo // Store temporary process info before confirmation
+	findProcessFunc     func() (*utils.ProcessInfo, error)
+	tempProcessInfo     *utils.ProcessInfo
+	ticker              *time.Ticker
 }
 
 func NewMonitor(logger *zap.SugaredLogger, window *app.Window) *Monitor {
+	// Check every second for GW2 process
 	return &Monitor{
 		logger:         logger,
 		continueButton: widget.Clickable{},
 		confirmButton:  widget.Clickable{},
 		skipButton:     widget.Clickable{},
 		window:         window,
+		ticker:         time.NewTicker(1 * time.Second),
 	}
 }
 
-func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func() (*ProcessInfo, error)) bool {
+func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func() (*utils.ProcessInfo, error)) bool {
 	// Store findProcessFunc for later use
 	if m.findProcessFunc == nil {
 		m.findProcessFunc = findProcessFunc
@@ -64,7 +59,7 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 	if !m.monitoringStarted {
 		m.monitoringStarted = true
 		m.startMonitoringTime = time.Now()
-		go m.monitorProcess()
+		go m.monitorProcess(m.ticker)
 	}
 
 	// User clicked confirm - get latest process info
@@ -88,6 +83,7 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 
 	// User confirmed/skipped and continue button clicked
 	if (m.userConfirmed || m.userSkipped) && m.continueButton.Clicked(gtx) {
+		m.ticker.Stop()
 		return true
 	}
 
@@ -191,11 +187,7 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 	return false
 }
 
-func (m *Monitor) monitorProcess() {
-	// Check every second for GW2 process
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
+func (m *Monitor) monitorProcess(ticker *time.Ticker) {
 	for {
 		select {
 		case <-ticker.C:
@@ -238,7 +230,7 @@ func (m *Monitor) monitorProcess() {
 	}
 }
 
-func (m *Monitor) GetProcessInfo() *ProcessInfo {
+func (m *Monitor) GetProcessInfo() *utils.ProcessInfo {
 	// If the user skipped or we haven't confirmed yet, return nil
 	if !m.userConfirmed || m.processInfo == nil {
 		return nil

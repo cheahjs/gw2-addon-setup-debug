@@ -11,7 +11,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/cheahjs/gw2-addon-setup-debug/ui/process_modules"
 	"golang.org/x/sys/windows"
 )
 
@@ -19,6 +18,16 @@ type ModuleInfo struct {
 	ModuleName  string
 	BaseAddress uintptr
 	ModuleSize  uint32
+	EntryPoint  uintptr
+}
+
+type ProcessInfo struct {
+	ProcessID      uint32
+	ExecutablePath string
+	LoadedModules  []ModuleInfo
+	WorkingDir     string
+	CommandLine    string
+	Timestamp      time.Time
 }
 
 // MODULEINFO represents the structure returned by GetModuleInformation
@@ -28,7 +37,7 @@ type MODULEINFO struct {
 	EntryPoint  uintptr
 }
 
-func FindGW2Process() (*process_modules.ProcessInfo, error) {
+func FindGW2Process() (*ProcessInfo, error) {
 	// Create a snapshot of running processes
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
@@ -73,16 +82,10 @@ func FindGW2Process() (*process_modules.ProcessInfo, error) {
 				return nil, fmt.Errorf("failed to list process modules: %w", err)
 			}
 
-			// Convert ModuleInfo to string paths for compatibility
-			loadedModules := make([]string, len(moduleList))
-			for i, module := range moduleList {
-				loadedModules[i] = module.ModuleName
-			}
-
-			return &process_modules.ProcessInfo{
+			return &ProcessInfo{
 				ProcessID:      pid,
 				ExecutablePath: execPath,
-				LoadedModules:  loadedModules,
+				LoadedModules:  moduleList,
 				WorkingDir:     filepath.Dir(execPath),
 				CommandLine:    execPath,
 				Timestamp:      time.Now(),
@@ -115,7 +118,7 @@ func getProcessPath(handle windows.Handle) (string, error) {
 
 func listProcessModules(handle windows.Handle) ([]ModuleInfo, error) {
 	var modules [1024]windows.Handle
-	var cb = uint32(unsafe.Sizeof(modules[0]))
+	var cb = uint32(unsafe.Sizeof(modules))
 	var needed uint32
 	if err := windows.EnumProcessModulesEx(handle, &modules[0], cb, &needed, windows.LIST_MODULES_ALL); err != nil {
 		return nil, fmt.Errorf("failed to enumerate process modules: %w", err)
@@ -130,13 +133,14 @@ func listProcessModules(handle windows.Handle) ([]ModuleInfo, error) {
 		}
 
 		var moduleName [windows.MAX_PATH]uint16
-		if err := windows.GetModuleFileNameEx(handle, modules[i], &moduleName[0], windows.MAX_PATH); err != nil {
+		if err := windows.GetModuleFileNameEx(handle, modules[i], &moduleName[0], uint32(len(moduleName))); err != nil {
 			return nil, fmt.Errorf("failed to get module file name: %w", err)
 		}
 
 		moduleInfos = append(moduleInfos, ModuleInfo{
 			BaseAddress: mi.BaseOfDll,
 			ModuleSize:  mi.SizeOfImage,
+			EntryPoint:  mi.EntryPoint,
 			ModuleName:  syscall.UTF16ToString(moduleName[:]),
 		})
 	}

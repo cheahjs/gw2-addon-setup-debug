@@ -27,11 +27,11 @@ type UI struct {
 	// Data passed between screens
 	gw2Directory string
 	dllInfos     []*utils.DllInfo
-	processInfo  *process_modules.ProcessInfo
+	processInfo  *utils.ProcessInfo
 
 	// Function pointers for platform-specific operations
 	scanDllFunc     func(string) (*utils.DllInfo, error)
-	findProcessFunc func() (*process_modules.ProcessInfo, error)
+	findProcessFunc func() (*utils.ProcessInfo, error)
 }
 
 func NewUI(logger *zap.SugaredLogger) *UI {
@@ -47,7 +47,7 @@ func (ui *UI) SetScanDllFunc(fn func(string) (*utils.DllInfo, error)) {
 	ui.scanDllFunc = fn
 }
 
-func (ui *UI) SetFindProcessFunc(fn func() (*process_modules.ProcessInfo, error)) {
+func (ui *UI) SetFindProcessFunc(fn func() (*utils.ProcessInfo, error)) {
 	ui.findProcessFunc = fn
 }
 

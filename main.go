@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/cheahjs/gw2-addon-setup-debug/ui"
-	"github.com/cheahjs/gw2-addon-setup-debug/ui/process_modules"
 	"github.com/cheahjs/gw2-addon-setup-debug/utils"
 
 	"net/http"
@@ -46,7 +45,7 @@ func main() {
 		return utils.ScanDll(logger, dllPath)
 	})
 
-	gui.SetFindProcessFunc(func() (*process_modules.ProcessInfo, error) {
+	gui.SetFindProcessFunc(func() (*utils.ProcessInfo, error) {
 		return utils.FindGW2Process()
 	})
 
