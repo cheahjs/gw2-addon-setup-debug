@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -175,23 +176,79 @@ func (r *Report) saveReport() {
 
 	// Add DLL info
 	report.WriteString(fmt.Sprintf("=== DLLs in Directory (%d total) ===\n", len(r.dllInfos)))
+	// Sort DLLs by IsNexus, IsArcdps, IsAddonLoaderShim, IsD3D11Shim, IsDXGIShim, IsAddonLoaderCore, IsAddonLoaderAddon, IsNexusAddon, IsArcdpsAddon, then alphabetically
+	sort.Slice(r.dllInfos, func(i, j int) bool {
+		if r.dllInfos[i].IsNexus != r.dllInfos[j].IsNexus {
+			return r.dllInfos[i].IsNexus
+		}
+		if r.dllInfos[i].IsArcdps != r.dllInfos[j].IsArcdps {
+			return r.dllInfos[i].IsArcdps
+		}
+		if r.dllInfos[i].IsAddonLoaderShim != r.dllInfos[j].IsAddonLoaderShim {
+			return r.dllInfos[i].IsAddonLoaderShim
+		}
+		if r.dllInfos[i].IsD3D11Shim != r.dllInfos[j].IsD3D11Shim {
+			return r.dllInfos[i].IsD3D11Shim
+		}
+		if r.dllInfos[i].IsDXGIShim != r.dllInfos[j].IsDXGIShim {
+			return r.dllInfos[i].IsDXGIShim
+		}
+		if r.dllInfos[i].IsAddonLoaderCore != r.dllInfos[j].IsAddonLoaderCore {
+			return r.dllInfos[i].IsAddonLoaderCore
+		}
+		if r.dllInfos[i].IsAddonLoaderAddon != r.dllInfos[j].IsAddonLoaderAddon {
+			return r.dllInfos[i].IsAddonLoaderAddon
+		}
+		if r.dllInfos[i].IsNexusAddon != r.dllInfos[j].IsNexusAddon {
+			return r.dllInfos[i].IsNexusAddon
+		}
+		if r.dllInfos[i].IsArcdpsAddon != r.dllInfos[j].IsArcdpsAddon {
+			return r.dllInfos[i].IsArcdpsAddon
+		}
+		return r.dllInfos[i].FilePath < r.dllInfos[j].FilePath
+	})
+
 	for i, dll := range r.dllInfos {
 		report.WriteString(fmt.Sprintf("DLL #%d: %s\n", i+1, filepath.Base(dll.FilePath)))
+		// Add a header with all the flags
+		var flags strings.Builder
+		if dll.IsNexus {
+			flags.WriteString("[Nexus] ")
+		}
+		if dll.IsArcdps {
+			flags.WriteString("[Arcdps] ")
+		}
+		if dll.IsAddonLoaderShim {
+			flags.WriteString("[AddonLoaderShim] ")
+		}
+		if dll.IsD3D11Shim {
+			flags.WriteString("[D3D11Shim] ")
+		}
+		if dll.IsDXGIShim {
+			flags.WriteString("[DXGIShim] ")
+		}
+		if dll.IsAddonLoaderCore {
+			flags.WriteString("[AddonLoaderCore] ")
+		}
+		if dll.IsAddonLoaderAddon {
+			flags.WriteString("[AddonLoaderAddon] ")
+		}
+		if dll.IsNexusAddon {
+			flags.WriteString("[NexusAddon] ")
+		}
+		if dll.IsArcdpsAddon {
+			flags.WriteString("[ArcdpsAddon] ")
+		}
+		if flags.Len() > 0 {
+			flags.WriteString("\n")
+			report.WriteString("  " + flags.String())
+		}
 		report.WriteString(fmt.Sprintf("  Path: %s\n", dll.FilePath))
 		if dll.Error != "" {
 			report.WriteString(fmt.Sprintf("  Error: %s\n", dll.Error))
 		} else {
 			report.WriteString(fmt.Sprintf("  MD5: %s\n", dll.Md5sum))
 			report.WriteString(fmt.Sprintf("  Version: %d.%d.%d.%d\n", dll.FileVersion.Major, dll.FileVersion.Minor, dll.FileVersion.Patch, dll.FileVersion.Build))
-			report.WriteString(fmt.Sprintf("  IsArcdps: %v\n", dll.IsArcdps))
-			report.WriteString(fmt.Sprintf("  IsArcdpsAddon: %v\n", dll.IsArcdpsAddon))
-			report.WriteString(fmt.Sprintf("  IsAddonLoaderShim: %v\n", dll.IsAddonLoaderShim))
-			report.WriteString(fmt.Sprintf("  IsAddonLoaderCore: %v\n", dll.IsAddonLoaderCore))
-			report.WriteString(fmt.Sprintf("  IsAddonLoaderAddon: %v\n", dll.IsAddonLoaderAddon))
-			report.WriteString(fmt.Sprintf("  IsNexus: %v\n", dll.IsNexus))
-			report.WriteString(fmt.Sprintf("  IsNexusAddon: %v\n", dll.IsNexusAddon))
-			report.WriteString(fmt.Sprintf("  IsD3D11Shim: %v\n", dll.IsD3D11Shim))
-			report.WriteString(fmt.Sprintf("  IsDXGIShim: %v\n", dll.IsDXGIShim))
 		}
 		report.WriteString("\n")
 	}
@@ -206,8 +263,12 @@ func (r *Report) saveReport() {
 		report.WriteString(fmt.Sprintf("Captured At: %s\n\n", r.processInfo.Timestamp.Format(time.RFC1123)))
 
 		report.WriteString(fmt.Sprintf("=== Loaded Modules (%d total) ===\n", len(r.processInfo.LoadedModules)))
-		for i, module := range r.processInfo.LoadedModules {
-			report.WriteString(fmt.Sprintf("%d. %s (0x%x) - %d bytes\n", i+1, module.ModuleName, module.BaseAddress, module.ModuleSize))
+		// Sort modules by module name (case insensitive)
+		sort.Slice(r.processInfo.LoadedModules, func(i, j int) bool {
+			return strings.ToLower(r.processInfo.LoadedModules[i].ModuleName) < strings.ToLower(r.processInfo.LoadedModules[j].ModuleName)
+		})
+		for _, module := range r.processInfo.LoadedModules {
+			report.WriteString(fmt.Sprintf("%s (0x%x) - %d bytes\n", module.ModuleName, module.BaseAddress, module.ModuleSize))
 		}
 	} else {
 		report.WriteString("=== GW2 Process Information ===\n")
