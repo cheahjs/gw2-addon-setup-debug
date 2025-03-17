@@ -16,24 +16,26 @@ import (
 )
 
 type Directory struct {
-	logger         *zap.SugaredLogger
-	directory      string
-	selectButton   widget.Clickable
-	continueButton widget.Clickable
-	errorMessage   string
-	isValid        bool
-	fileExplorer   *explorer.Explorer
+	logger            *zap.SugaredLogger
+	directory         string
+	selectButton      widget.Clickable
+	continueButton    widget.Clickable
+	errorMessage      string
+	isValid           bool
+	fileExplorer      *explorer.Explorer
+	includeDirListing widget.Bool
 }
 
 func NewDirectory(logger *zap.SugaredLogger) *Directory {
 	return &Directory{
-		logger:         logger,
-		selectButton:   widget.Clickable{},
-		continueButton: widget.Clickable{},
+		logger:            logger,
+		selectButton:      widget.Clickable{},
+		continueButton:    widget.Clickable{},
+		includeDirListing: widget.Bool{Value: true}, // Include directory listing by default
 	}
 }
 
-func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bool, string) {
+func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bool, string, bool) {
 	th := material.NewTheme()
 
 	if d.fileExplorer == nil {
@@ -74,7 +76,7 @@ func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bo
 
 	// Continue button clicked and directory is valid
 	if d.continueButton.Clicked(gtx) && d.isValid {
-		return true, d.directory
+		return true, d.directory, d.includeDirListing.Value
 	}
 
 	layout.Flex{
@@ -118,13 +120,24 @@ func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bo
 		),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if d.isValid {
+				// Add checkbox for directory listing
+				checkbox := material.CheckBox(th, &d.includeDirListing, "Include directory listing in report")
+				return checkbox.Layout(gtx)
+			}
+			return layout.Dimensions{}
+		}),
+		layout.Rigid(
+			layout.Spacer{Height: 10}.Layout,
+		),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if d.isValid {
 				btn := material.Button(th, &d.continueButton, "Continue")
 				return btn.Layout(gtx)
 			}
 			return layout.Dimensions{}
 		}))
 
-	return false, ""
+	return false, "", false
 }
 
 func (d *Directory) validateDirectory() {

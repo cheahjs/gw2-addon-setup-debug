@@ -25,9 +25,10 @@ type UI struct {
 	currentState uiState
 
 	// Data passed between screens
-	gw2Directory string
-	dllInfos     []*utils.DllInfo
-	processInfo  *utils.ProcessInfo
+	gw2Directory      string
+	includeDirListing bool
+	dllInfos          []*utils.DllInfo
+	processInfo       *utils.ProcessInfo
 
 	// Function pointers for platform-specific operations
 	scanDllFunc     func(string) (*utils.DllInfo, error)
@@ -69,9 +70,10 @@ func (ui *UI) Run(w *app.Window) error {
 				}
 
 			case selectDirectoryState:
-				continueToNextStep, selectedDir := ui.directoryPicker.Run(w, gtx, e)
+				continueToNextStep, selectedDir, includeDirListing := ui.directoryPicker.Run(w, gtx, e)
 				if continueToNextStep {
 					ui.gw2Directory = selectedDir
+					ui.includeDirListing = includeDirListing
 					ui.dllScanner = scan_directory.NewScanner(ui.Logger, selectedDir, w)
 					ui.currentState = scanDllsState
 				}
@@ -86,7 +88,7 @@ func (ui *UI) Run(w *app.Window) error {
 			case processMonitorState:
 				if ui.processMonitor.Run(gtx, e, ui.findProcessFunc) {
 					ui.processInfo = ui.processMonitor.GetProcessInfo()
-					ui.resultReport = result.NewReport(ui.Logger, ui.gw2Directory, ui.dllInfos, ui.processInfo)
+					ui.resultReport = result.NewReport(ui.Logger, ui.gw2Directory, ui.dllInfos, ui.processInfo, ui.includeDirListing)
 					ui.currentState = resultState
 				}
 

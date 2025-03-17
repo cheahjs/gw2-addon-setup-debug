@@ -21,27 +21,29 @@ import (
 )
 
 type Report struct {
-	logger       *zap.SugaredLogger
-	saveButton   widget.Clickable
-	exitButton   widget.Clickable
-	gw2Dir       string
-	dllInfos     []*utils.DllInfo
-	processInfo  *utils.ProcessInfo
-	reportSaved  bool
-	saveLocation string
-	errorMessage string
-	list         *layout.List
+	logger            *zap.SugaredLogger
+	saveButton        widget.Clickable
+	exitButton        widget.Clickable
+	gw2Dir            string
+	includeDirListing bool
+	dllInfos          []*utils.DllInfo
+	processInfo       *utils.ProcessInfo
+	reportSaved       bool
+	saveLocation      string
+	errorMessage      string
+	list              *layout.List
 }
 
-func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo) *Report {
+func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo, includeDirListing bool) *Report {
 	return &Report{
-		logger:      logger,
-		saveButton:  widget.Clickable{},
-		exitButton:  widget.Clickable{},
-		gw2Dir:      gw2Dir,
-		dllInfos:    dllInfos,
-		processInfo: processInfo,
-		list:        &layout.List{Axis: layout.Vertical},
+		logger:            logger,
+		saveButton:        widget.Clickable{},
+		exitButton:        widget.Clickable{},
+		gw2Dir:            gw2Dir,
+		includeDirListing: includeDirListing,
+		dllInfos:          dllInfos,
+		processInfo:       processInfo,
+		list:              &layout.List{Axis: layout.Vertical},
 	}
 }
 
@@ -119,18 +121,6 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 					summary.WriteString(fmt.Sprintf("  - Executable: %s\n", r.processInfo.ExecutablePath))
 					summary.WriteString(fmt.Sprintf("  - Working Directory: %s\n", r.processInfo.WorkingDir))
 					summary.WriteString(fmt.Sprintf("  - Loaded modules: %d\n", len(r.processInfo.LoadedModules)))
-					// Write the active shims (d3d11.dll, dxgi.dll, bin64/dxgi.dll)
-					summary.WriteString(fmt.Sprintf("  - Active shims:\n"))
-					executablePath := filepath.Dir(r.processInfo.ExecutablePath)
-					for _, module := range r.processInfo.LoadedModules {
-						// lowercase the module name
-						moduleName := strings.ToLower(module.ModuleName)
-						if moduleName == filepath.Join(executablePath, "d3d11.dll") ||
-							moduleName == filepath.Join(executablePath, "dxgi.dll") ||
-							moduleName == filepath.Join(executablePath, "bin64", "dxgi.dll") {
-							summary.WriteString(fmt.Sprintf("    - %s\n", module.ModuleName))
-						}
-					}
 				} else {
 					summary.WriteString("- No GW2 process info captured\n")
 				}
@@ -322,6 +312,53 @@ func (r *Report) saveReport() {
 	} else {
 		report.WriteString("=== GW2 Process Information ===\n")
 		report.WriteString("No process information captured\n")
+	}
+
+	// Add directory listing if opted in
+	if r.includeDirListing {
+		report.WriteString("\n=== GW2 Directory Listing ===\n\n")
+
+		// Helper function to recursively list directory contents
+		var listDirRecursive func(dirPath string, indent string, maxDepth int, currentDepth int)
+		listDirRecursive = func(dirPath string, indent string, maxDepth int, currentDepth int) {
+			// Skip if we've reached max depth
+			if maxDepth > 0 && currentDepth > maxDepth {
+				report.WriteString(fmt.Sprintf("%s[max depth reached]\n", indent))
+				return
+			}
+
+			files, err := filepath.Glob(filepath.Join(dirPath, "*"))
+			if err != nil {
+				r.logger.Errorw("Failed to get directory listing", "error", err, "path", dirPath)
+				report.WriteString(fmt.Sprintf("%sError getting directory listing: %s\n", indent, err.Error()))
+				return
+			}
+
+			// Sort files alphabetically
+			sort.Strings(files)
+			for _, file := range files {
+				// Get file info
+				info, err := os.Stat(file)
+				if err != nil {
+					report.WriteString(fmt.Sprintf("%s%s (error: %s)\n", indent, filepath.Base(file), err.Error()))
+					continue
+				}
+
+				// Show file size for files
+				if !info.IsDir() {
+					report.WriteString(fmt.Sprintf("%s%s (%d bytes)\n", indent, filepath.Base(file), info.Size()))
+				} else {
+					report.WriteString(fmt.Sprintf("%s%s/ (directory)\n", indent, filepath.Base(file)))
+					// Recursively list subdirectory contents
+					listDirRecursive(file, indent+"  ", maxDepth, currentDepth+1)
+				}
+			}
+		}
+
+		// List main directory and subdirectories recursively
+		// Use a max depth of 3 to prevent extremely large reports
+		listDirRecursive(r.gw2Dir, "", 3, 0)
+		report.WriteString("\n")
 	}
 
 	// Write to file
