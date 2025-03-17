@@ -19,9 +19,7 @@ jobs:
         run: go get .
 
       - name: Build
-        env:
-          GOARCH: amd64
-        run: go build -ldflags -H=windowsgui -o gw2-addon-setup-debug.exe
+        run: go tool gogio -target windows -arch amd64 -buildmode=exe -o gw2-addon-setup-debug.exe .
 
       - name: Upload build
         uses: actions/upload-artifact@v4
