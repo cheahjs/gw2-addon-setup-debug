@@ -142,7 +142,8 @@ func listProcessModules(pid uint32) ([]ModuleInfo, error) {
 	// Get the first module
 	err = windows.Module32First(snapshot, &moduleEntry)
 	if err != nil {
-		return nil, fmt.Errorf("Module32First failed: %w", err)
+		// Return a more descriptive error for debugging
+		return nil, fmt.Errorf("Module32First failed with pid %d: %w", pid, err)
 	}
 
 	for {
@@ -176,33 +177,40 @@ func listProcessModules(pid uint32) ([]ModuleInfo, error) {
 func listProcessModulesPSAPI(handle windows.Handle) ([]ModuleInfo, error) {
 	var modules []ModuleInfo
 
-	// Try with a smaller initial buffer size
-	const initialSize = 256
+	// Start with a reasonable buffer size
+	const initialSize = 1024
 	moduleHandles := make([]windows.Handle, initialSize)
 	var needed uint32
 
 	// First call to get the actual number of modules
-	r, _, _ := enumProcessModules.Call(
+	r, _, err := enumProcessModules.Call(
 		uintptr(handle),
 		uintptr(unsafe.Pointer(&moduleHandles[0])),
-		uintptr(len(moduleHandles)*int(unsafe.Sizeof(moduleHandles[0]))),
+		uintptr(initialSize*int(unsafe.Sizeof(windows.Handle(0)))),
 		uintptr(unsafe.Pointer(&needed)))
 
-	// If we got a size, resize the buffer and try again
-	if r != 0 && needed > 0 {
-		numModules := needed / uint32(unsafe.Sizeof(moduleHandles[0]))
-		if numModules > uint32(len(moduleHandles)) {
-			moduleHandles = make([]windows.Handle, numModules)
-			r, _, _ = enumProcessModules.Call(
-				uintptr(handle),
-				uintptr(unsafe.Pointer(&moduleHandles[0])),
-				uintptr(len(moduleHandles)*int(unsafe.Sizeof(moduleHandles[0]))),
-				uintptr(unsafe.Pointer(&needed)))
+	if r == 0 {
+		return nil, fmt.Errorf("EnumProcessModules failed: %v", err)
+	}
+
+	// Calculate number of modules and resize the buffer if necessary
+	numModules := needed / uint32(unsafe.Sizeof(windows.Handle(0)))
+	if numModules > initialSize {
+		moduleHandles = make([]windows.Handle, numModules)
+		r, _, err = enumProcessModules.Call(
+			uintptr(handle),
+			uintptr(unsafe.Pointer(&moduleHandles[0])),
+			uintptr(numModules*uint32(unsafe.Sizeof(windows.Handle(0)))),
+			uintptr(unsafe.Pointer(&needed)))
+
+		if r == 0 {
+			return nil, fmt.Errorf("EnumProcessModules (resized) failed: %v", err)
 		}
 	}
 
-	// If we still couldn't get any modules, try with just the first module
-	if r == 0 || needed == 0 {
+	// Reset numModules based on what we got back
+	numModules = needed / uint32(unsafe.Sizeof(windows.Handle(0)))
+	if numModules == 0 {
 		// Try to at least get the main module
 		moduleHandles = moduleHandles[:1]
 		r, _, _ = enumProcessModules.Call(
@@ -212,49 +220,43 @@ func listProcessModulesPSAPI(handle windows.Handle) ([]ModuleInfo, error) {
 			uintptr(unsafe.Pointer(&needed)))
 
 		if r == 0 {
-			// If we can't even get the main module, return an empty list
-			// This is not necessarily an error as some processes may legitimately block access
-			return modules, nil
+			return modules, nil // Return empty list if we can't even get the main module
 		}
+		numModules = 1
 	}
 
-	numModules := needed / uint32(unsafe.Sizeof(moduleHandles[0]))
-	if numModules > uint32(len(moduleHandles)) {
-		numModules = uint32(len(moduleHandles))
-	}
-
-	// Get information for each module
+	// Process each module
 	for i := uint32(0); i < numModules; i++ {
 		if moduleHandles[i] == 0 {
 			continue
 		}
 
-		// Try to get module information
-		var moduleInfo MODULEINFO
-		r, _, _ = getModuleInformation.Call(
-			uintptr(handle),
-			uintptr(moduleHandles[i]),
-			uintptr(unsafe.Pointer(&moduleInfo)),
-			uintptr(unsafe.Sizeof(moduleInfo)))
-
 		// Get module file name
 		var modulePath [windows.MAX_PATH]uint16
-		r2, _, _ := getModuleFileNameEx.Call(
+		r, _, _ := getModuleFileNameEx.Call(
 			uintptr(handle),
 			uintptr(moduleHandles[i]),
 			uintptr(unsafe.Pointer(&modulePath[0])),
 			uintptr(len(modulePath)))
 
-		// If we got at least the path, add it to the list
-		if r2 > 0 {
+		// If we got a path, add the module
+		if r > 0 {
+			// Try to get module information
+			var moduleInfo MODULEINFO
+			r2, _, _ := getModuleInformation.Call(
+				uintptr(handle),
+				uintptr(moduleHandles[i]),
+				uintptr(unsafe.Pointer(&moduleInfo)),
+				uintptr(unsafe.Sizeof(moduleInfo)))
+
 			modInfo := ModuleInfo{
-				ModuleName:  windows.UTF16ToString(modulePath[:r2]),
-				BaseAddress: uintptr(moduleHandles[i]), // Fallback if GetModuleInformation failed
+				ModuleName:  windows.UTF16ToString(modulePath[:r]),
+				BaseAddress: uintptr(moduleHandles[i]),
 				ModuleSize:  0,
 			}
 
-			// If we got module info successfully, use that instead
-			if r != 0 {
+			// If we got module info successfully, use that
+			if r2 != 0 {
 				modInfo.BaseAddress = moduleInfo.BaseOfDll
 				modInfo.ModuleSize = moduleInfo.SizeOfImage
 			}
@@ -263,13 +265,8 @@ func listProcessModulesPSAPI(handle windows.Handle) ([]ModuleInfo, error) {
 		}
 	}
 
-	// If we got any modules at all, consider it a success
-	if len(modules) > 0 {
-		return modules, nil
-	}
-
-	// Only return error if we got absolutely nothing
-	return nil, fmt.Errorf("failed to get any module information")
+	// Return what we have, even if empty
+	return modules, nil
 }
 
 func isGW2Process(path string) bool {

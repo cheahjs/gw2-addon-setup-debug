@@ -35,6 +35,7 @@ type DllInfo struct {
 	IsD3D11Shim        bool
 	IsDXGIShim         bool
 	FileVersion        WinVersion
+	Error              string
 }
 
 func (info *DllInfo) String() string {

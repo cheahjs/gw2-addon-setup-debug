@@ -27,9 +27,11 @@ type Monitor struct {
 	logger              *zap.SugaredLogger
 	continueButton      widget.Clickable
 	confirmButton       widget.Clickable
+	skipButton          widget.Clickable
 	monitoringStarted   bool
 	monitoringDone      bool
 	userConfirmed       bool
+	userSkipped         bool
 	status              string
 	errorMessage        string
 	processInfo         *ProcessInfo
@@ -45,6 +47,7 @@ func NewMonitor(logger *zap.SugaredLogger, window *app.Window) *Monitor {
 		logger:         logger,
 		continueButton: widget.Clickable{},
 		confirmButton:  widget.Clickable{},
+		skipButton:     widget.Clickable{},
 		window:         window,
 	}
 }
@@ -74,8 +77,17 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 		}
 	}
 
-	// User confirmed and continue button clicked
-	if m.userConfirmed && m.continueButton.Clicked(gtx) {
+	// User clicked skip
+	if m.skipButton.Clicked(gtx) {
+		m.userSkipped = true
+		m.userConfirmed = false
+		m.processInfo = nil
+		m.status = "Process detection skipped"
+		m.logger.Infow("User skipped GW2 process detection")
+	}
+
+	// User confirmed/skipped and continue button clicked
+	if (m.userConfirmed || m.userSkipped) && m.continueButton.Clicked(gtx) {
 		return true
 	}
 
@@ -120,9 +132,25 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 			layout.Spacer{Height: 20}.Layout,
 		),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			if m.gw2ProcessFound && !m.userConfirmed {
-				btn := material.Button(th, &m.confirmButton, "I'm at the character selection screen")
-				return btn.Layout(gtx)
+			if !m.userConfirmed && !m.userSkipped {
+				flex := layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}
+
+				children := []layout.FlexChild{
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						if m.gw2ProcessFound {
+							btn := material.Button(th, &m.confirmButton, "I'm at the character selection screen")
+							return btn.Layout(gtx)
+						}
+						return layout.Dimensions{}
+					}),
+					layout.Rigid(layout.Spacer{Width: 10}.Layout),
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						btn := material.Button(th, &m.skipButton, "Skip this step")
+						return btn.Layout(gtx)
+					}),
+				}
+
+				return flex.Layout(gtx, children...)
 			}
 			return layout.Dimensions{}
 		}),
@@ -142,6 +170,10 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 				paragraph := material.Body1(th, moduleText.String())
 				paragraph.Alignment = text.Start
 				return paragraph.Layout(gtx)
+			} else if m.userSkipped {
+				paragraph := material.Body1(th, "Guild Wars 2 process detection has been skipped.")
+				paragraph.Alignment = text.Middle
+				return paragraph.Layout(gtx)
 			}
 			return layout.Dimensions{}
 		}),
@@ -149,7 +181,7 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 			layout.Spacer{Height: 20}.Layout,
 		),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			if m.userConfirmed {
+			if m.userConfirmed || m.userSkipped {
 				btn := material.Button(th, &m.continueButton, "Continue")
 				return btn.Layout(gtx)
 			}

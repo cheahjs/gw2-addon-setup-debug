@@ -178,17 +178,21 @@ func (r *Report) saveReport() {
 	for i, dll := range r.dllInfos {
 		report.WriteString(fmt.Sprintf("DLL #%d: %s\n", i+1, filepath.Base(dll.FilePath)))
 		report.WriteString(fmt.Sprintf("  Path: %s\n", dll.FilePath))
-		report.WriteString(fmt.Sprintf("  MD5: %s\n", dll.Md5sum))
-		report.WriteString(fmt.Sprintf("  Version: %s\n", dll.FileVersion))
-		report.WriteString(fmt.Sprintf("  IsArcdps: %v\n", dll.IsArcdps))
-		report.WriteString(fmt.Sprintf("  IsArcdpsAddon: %v\n", dll.IsArcdpsAddon))
-		report.WriteString(fmt.Sprintf("  IsAddonLoaderShim: %v\n", dll.IsAddonLoaderShim))
-		report.WriteString(fmt.Sprintf("  IsAddonLoaderCore: %v\n", dll.IsAddonLoaderCore))
-		report.WriteString(fmt.Sprintf("  IsAddonLoaderAddon: %v\n", dll.IsAddonLoaderAddon))
-		report.WriteString(fmt.Sprintf("  IsNexus: %v\n", dll.IsNexus))
-		report.WriteString(fmt.Sprintf("  IsNexusAddon: %v\n", dll.IsNexusAddon))
-		report.WriteString(fmt.Sprintf("  IsD3D11Shim: %v\n", dll.IsD3D11Shim))
-		report.WriteString(fmt.Sprintf("  IsDXGIShim: %v\n", dll.IsDXGIShim))
+		if dll.Error != "" {
+			report.WriteString(fmt.Sprintf("  Error: %s\n", dll.Error))
+		} else {
+			report.WriteString(fmt.Sprintf("  MD5: %s\n", dll.Md5sum))
+			report.WriteString(fmt.Sprintf("  Version: %s\n", dll.FileVersion))
+			report.WriteString(fmt.Sprintf("  IsArcdps: %v\n", dll.IsArcdps))
+			report.WriteString(fmt.Sprintf("  IsArcdpsAddon: %v\n", dll.IsArcdpsAddon))
+			report.WriteString(fmt.Sprintf("  IsAddonLoaderShim: %v\n", dll.IsAddonLoaderShim))
+			report.WriteString(fmt.Sprintf("  IsAddonLoaderCore: %v\n", dll.IsAddonLoaderCore))
+			report.WriteString(fmt.Sprintf("  IsAddonLoaderAddon: %v\n", dll.IsAddonLoaderAddon))
+			report.WriteString(fmt.Sprintf("  IsNexus: %v\n", dll.IsNexus))
+			report.WriteString(fmt.Sprintf("  IsNexusAddon: %v\n", dll.IsNexusAddon))
+			report.WriteString(fmt.Sprintf("  IsD3D11Shim: %v\n", dll.IsD3D11Shim))
+			report.WriteString(fmt.Sprintf("  IsDXGIShim: %v\n", dll.IsDXGIShim))
+		}
 		report.WriteString("\n")
 	}
 

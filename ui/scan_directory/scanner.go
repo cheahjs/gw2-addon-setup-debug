@@ -134,6 +134,10 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 		info, err := scanDll(dllPath)
 		if err != nil {
 			s.logger.Errorw("Failed to scan DLL", "path", dllPath, "error", err)
+			s.dllInfos = append(s.dllInfos, &utils.DllInfo{
+				Error: err.Error(),
+				FilePath: dllPath,
+			})
 			continue
 		}
 
