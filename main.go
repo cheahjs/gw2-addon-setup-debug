@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/cheahjs/gw2-addon-setup-debug/ui"
+	"github.com/cheahjs/gw2-addon-setup-debug/ui/process_modules"
+	"github.com/cheahjs/gw2-addon-setup-debug/ui/scan_directory"
 
 	"gioui.org/app"
 	"github.com/pkg/errors"
@@ -33,10 +35,19 @@ func main() {
 	// Start GUI
 	gui := ui.NewUI(logger)
 
+	// Register platform-specific functions
+	gui.SetScanDllFunc(func(dllPath string) (*scan_directory.DllInfo, error) {
+		return ScanDll(logger, dllPath)
+	})
+
+	gui.SetFindProcessFunc(func() (*process_modules.ProcessInfo, error) {
+		return FindGW2Process()
+	})
+
 	go func() {
 		window := new(app.Window)
 		window.Option(app.Title("Guild Wars 2 Addon Setup Debugger"))
-		window.Option(app.Size(600, 400))
+		window.Option(app.Size(700, 500))
 
 		err := gui.Run(window)
 		if err != nil {
