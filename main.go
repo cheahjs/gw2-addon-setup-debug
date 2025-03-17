@@ -9,9 +9,6 @@ import (
 	"github.com/cheahjs/gw2-addon-setup-debug/ui"
 	"github.com/cheahjs/gw2-addon-setup-debug/utils"
 
-	"net/http"
-	_ "net/http/pprof"
-
 	"gioui.org/app"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -24,9 +21,6 @@ func main() {
 			println("Failed to delete gw2-addon-debug.log, log file will be appended to.")
 		}
 	}
-	go func() {
-		println(http.ListenAndServe("localhost:6060", nil))
-	}()
 	// Initialize logger
 	logConfig := zap.NewDevelopmentConfig()
 	logConfig.OutputPaths = []string{"stdout", "gw2-addon-debug.log"}
