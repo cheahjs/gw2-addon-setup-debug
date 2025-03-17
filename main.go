@@ -34,11 +34,11 @@ func main() {
 	gui := ui.NewUI(logger)
 
 	go func() {
-		w := app.NewWindow(
-			app.Title("Guild Wars 2 Addon Setup Debugger"),
-			app.Size(600, 400),
-		)
-		err := gui.Run(w)
+		window := new(app.Window)
+		window.Option(app.Title("Guild Wars 2 Addon Setup Debugger"))
+		window.Option(app.Size(600, 400))
+
+		err := gui.Run(window)
 		if err != nil {
 			logger.Fatal(err)
 		}
@@ -46,44 +46,6 @@ func main() {
 	}()
 	app.Main()
 }
-
-
-// func oldmain() {
-// 	// Get current working directory
-// 	workDir, err := os.Getwd()
-// 	if err != nil {
-// 		logger.Fatalw("Failed to get current working directory",
-// 			"error", err)
-// 	}
-// 	logger.Infow("Starting debug", "cwd", workDir)
-
-// 	// Check if we are in the game directory
-// 	if err = isGameDir(workDir); err != nil {
-// 		logger.Fatalw("Are you running this from the game directory?",
-// 			"error", err)
-// 	}
-
-// 	// Print list of files in game directory
-// 	printFiles(logger, workDir)
-
-// 	// Build list of DLLs
-// 	dllPaths := getDllPaths(logger, workDir)
-
-// 	// Check what type of DLLs we have
-// 	for _, dllPath := range dllPaths {
-// 		dllInfo, err := parseDll(logger, dllPath)
-// 		if err != nil {
-// 			logger.Errorw("Failed to parse DLL",
-// 				"file", dllPath,
-// 				"error", err)
-// 			continue
-// 		}
-// 		logger.Infow("Parsed DLL",
-// 			"file", dllPath,
-// 			"info", dllInfo,
-// 		)
-// 	}
-// }
 
 func printFiles(logger *zap.SugaredLogger, workDir string) {
 	filepath.Walk(workDir, func(path string, info os.FileInfo, err error) error {

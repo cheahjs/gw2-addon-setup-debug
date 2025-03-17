@@ -1,7 +1,7 @@
 package start
 
 import (
-	"gioui.org/io/system"
+	"gioui.org/app"
 	"gioui.org/layout"
 	"gioui.org/text"
 	"gioui.org/widget"
@@ -18,7 +18,7 @@ func NewMenu() *Menu {
 	}
 }
 
-func (sm *Menu) Run(gtx layout.Context, e system.FrameEvent) bool {
+func (sm *Menu) Run(gtx layout.Context, e app.FrameEvent) bool {
 	th := material.NewTheme()
 
 	clicked := sm.startButton.Clicked(gtx)

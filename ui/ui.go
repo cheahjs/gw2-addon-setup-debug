@@ -2,8 +2,6 @@ package ui
 
 import (
 	"gioui.org/app"
-	"gioui.org/io/system"
-	"gioui.org/layout"
 	"gioui.org/op"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/start"
 	"go.uber.org/zap"
@@ -28,12 +26,12 @@ func NewUI(logger *zap.SugaredLogger) *UI {
 func (ui *UI) Run(w *app.Window) error {
 	var ops op.Ops
 	for {
-		switch e := w.NextEvent().(type) {
-		case system.DestroyEvent:
+		switch e := w.Event().(type) {
+		case app.DestroyEvent:
 			return e.Err
-		case system.FrameEvent:
+		case app.FrameEvent:
 			// This graphics context is used for managing the rendering state.
-			gtx := layout.NewContext(&ops, e)
+			gtx := app.NewContext(&ops, e)
 
 			switch ui.currentState {
 			case startMenuState:
