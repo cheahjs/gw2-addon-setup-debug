@@ -12,6 +12,7 @@ require (
 
 require (
 	gioui.org/shader v1.0.8 // indirect
+	gioui.org/x v0.8.0 // indirect
 	github.com/edsrzf/mmap-go v1.2.0 // indirect
 	github.com/go-text/typesetting v0.3.0 // indirect
 	github.com/secDre4mer/pkcs7 v0.0.0-20240322103146-665324a4461d // indirect

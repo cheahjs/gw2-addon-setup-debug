@@ -8,6 +8,7 @@ import (
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/scan_directory"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/select_directory"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/start"
+	"github.com/cheahjs/gw2-addon-setup-debug/utils"
 	"go.uber.org/zap"
 )
 
@@ -25,11 +26,11 @@ type UI struct {
 
 	// Data passed between screens
 	gw2Directory string
-	dllInfos     []*scan_directory.DllInfo
+	dllInfos     []*utils.DllInfo
 	processInfo  *process_modules.ProcessInfo
 
 	// Function pointers for platform-specific operations
-	scanDllFunc     func(string) (*scan_directory.DllInfo, error)
+	scanDllFunc     func(string) (*utils.DllInfo, error)
 	findProcessFunc func() (*process_modules.ProcessInfo, error)
 }
 
@@ -42,7 +43,7 @@ func NewUI(logger *zap.SugaredLogger) *UI {
 	}
 }
 
-func (ui *UI) SetScanDllFunc(fn func(string) (*scan_directory.DllInfo, error)) {
+func (ui *UI) SetScanDllFunc(fn func(string) (*utils.DllInfo, error)) {
 	ui.scanDllFunc = fn
 }
 
@@ -68,17 +69,17 @@ func (ui *UI) Run(w *app.Window) error {
 				}
 
 			case selectDirectoryState:
-				continueToNextStep, selectedDir := ui.directoryPicker.Run(gtx, e)
+				continueToNextStep, selectedDir := ui.directoryPicker.Run(w, gtx, e)
 				if continueToNextStep {
 					ui.gw2Directory = selectedDir
-					ui.dllScanner = scan_directory.NewScanner(ui.Logger, selectedDir)
+					ui.dllScanner = scan_directory.NewScanner(ui.Logger, selectedDir, w)
 					ui.currentState = scanDllsState
 				}
 
 			case scanDllsState:
 				if ui.dllScanner.Run(gtx, e, ui.scanDllFunc) {
 					ui.dllInfos = ui.dllScanner.GetDllInfos()
-					ui.processMonitor = process_modules.NewMonitor(ui.Logger)
+					ui.processMonitor = process_modules.NewMonitor(ui.Logger, w)
 					ui.currentState = processMonitorState
 				}
 

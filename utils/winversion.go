@@ -6,7 +6,7 @@
 //go:build windows
 // +build windows
 
-package main
+package utils
 
 import (
 	"errors"

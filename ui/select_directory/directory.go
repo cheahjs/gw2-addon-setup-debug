@@ -4,12 +4,14 @@ import (
 	"image/color"
 	"os"
 	"path"
+	"path/filepath"
 
 	"gioui.org/app"
 	"gioui.org/layout"
 	"gioui.org/text"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"gioui.org/x/explorer"
 	"go.uber.org/zap"
 )
 
@@ -20,6 +22,7 @@ type Directory struct {
 	continueButton widget.Clickable
 	errorMessage   string
 	isValid        bool
+	fileExplorer   *explorer.Explorer
 }
 
 func NewDirectory(logger *zap.SugaredLogger) *Directory {
@@ -30,16 +33,43 @@ func NewDirectory(logger *zap.SugaredLogger) *Directory {
 	}
 }
 
-func (d *Directory) Run(gtx layout.Context, e app.FrameEvent) (bool, string) {
+func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bool, string) {
 	th := material.NewTheme()
 
+	if d.fileExplorer == nil {
+		d.fileExplorer = explorer.NewExplorer(w)
+	}
+
+	// Handle explorer events
+	d.fileExplorer.ListenEvents(e)
+
 	if d.selectButton.Clicked(gtx) {
-		// Open file picker dialog
-		// Note: This is a placeholder. In a real implementation, you would use a
-		// platform-specific file picker dialog or implement a custom one
-		// For simplicity, we'll simulate selection with a hardcoded path for now
-		d.directory = "C:\\Program Files\\Guild Wars 2"
-		d.validateDirectory()
+		go func() {
+			readCloser, err := d.fileExplorer.ChooseFile("*Gw2-64.exe")
+			if err != nil {
+				d.logger.Errorw("Failed to choose file", "error", err)
+				return
+			}
+			defer readCloser.Close()
+
+			// Coerce the readCloser to a os.File
+			file, ok := readCloser.(*os.File)
+			if !ok {
+				d.logger.Errorw("Failed to coerce readCloser to os.File", "error", err)
+				return
+			}
+
+			// Get the path of the file
+			filePath := file.Name()
+			dirPath := filepath.Dir(filePath)
+
+			// Set the directory and validate
+			d.directory = dirPath
+			d.validateDirectory()
+
+			// Trigger a re-render
+			w.Invalidate()
+		}()
 	}
 
 	// Continue button clicked and directory is valid
@@ -51,7 +81,7 @@ func (d *Directory) Run(gtx layout.Context, e app.FrameEvent) (bool, string) {
 		Axis: layout.Vertical,
 	}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			paragraph := material.Body1(th, "Please select your Guild Wars 2 installation directory.")
+			paragraph := material.Body1(th, "Please select your Guild Wars 2 executable (Gw2-64.exe).")
 			paragraph.Alignment = text.Middle
 			return paragraph.Layout(gtx)
 		}),
@@ -59,7 +89,7 @@ func (d *Directory) Run(gtx layout.Context, e app.FrameEvent) (bool, string) {
 			layout.Spacer{Height: 20}.Layout,
 		),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			btn := material.Button(th, &d.selectButton, "Select Directory")
+			btn := material.Button(th, &d.selectButton, "Select Gw2-64.exe")
 			return btn.Layout(gtx)
 		}),
 		layout.Rigid(
@@ -93,9 +123,6 @@ func (d *Directory) Run(gtx layout.Context, e app.FrameEvent) (bool, string) {
 			}
 			return layout.Dimensions{}
 		}))
-
-	// Pass the drawing operations to the GPU.
-	e.Frame(gtx.Ops)
 
 	return false, ""
 }

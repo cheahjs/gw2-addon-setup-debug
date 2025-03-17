@@ -15,7 +15,7 @@ import (
 )
 
 type ProcessInfo struct {
-	ProcessID      int
+	ProcessID      uint32
 	ExecutablePath string
 	LoadedModules  []string
 	WorkingDir     string
@@ -35,34 +35,48 @@ type Monitor struct {
 	processInfo         *ProcessInfo
 	startMonitoringTime time.Time
 	gw2ProcessFound     bool
+	window              *app.Window
+	findProcessFunc     func() (*ProcessInfo, error)
+	tempProcessInfo     *ProcessInfo // Store temporary process info before confirmation
 }
 
-func NewMonitor(logger *zap.SugaredLogger) *Monitor {
+func NewMonitor(logger *zap.SugaredLogger, window *app.Window) *Monitor {
 	return &Monitor{
 		logger:         logger,
 		continueButton: widget.Clickable{},
 		confirmButton:  widget.Clickable{},
+		window:         window,
 	}
 }
 
 func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func() (*ProcessInfo, error)) bool {
+	// Store findProcessFunc for later use
+	if m.findProcessFunc == nil {
+		m.findProcessFunc = findProcessFunc
+	}
+
 	th := material.NewTheme()
 
 	// Start monitoring if it hasn't started yet
 	if !m.monitoringStarted {
 		m.monitoringStarted = true
 		m.startMonitoringTime = time.Now()
-		go m.monitorProcess(findProcessFunc)
+		go m.monitorProcess()
+	}
+
+	// User clicked confirm - get latest process info
+	if m.confirmButton.Clicked(gtx) {
+		if latestInfo, err := m.findProcessFunc(); err == nil {
+			m.processInfo = latestInfo
+			m.userConfirmed = true
+		} else {
+			m.errorMessage = "Failed to get latest process information"
+		}
 	}
 
 	// User confirmed and continue button clicked
 	if m.userConfirmed && m.continueButton.Clicked(gtx) {
 		return true
-	}
-
-	// User clicked confirm
-	if m.confirmButton.Clicked(gtx) {
-		m.userConfirmed = true
 	}
 
 	layout.Flex{
@@ -142,13 +156,10 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 			return layout.Dimensions{}
 		}))
 
-	// Pass the drawing operations to the GPU.
-	e.Frame(gtx.Ops)
-
 	return false
 }
 
-func (m *Monitor) monitorProcess(findProcessFunc func() (*ProcessInfo, error)) {
+func (m *Monitor) monitorProcess() {
 	// Check every second for GW2 process
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -156,17 +167,32 @@ func (m *Monitor) monitorProcess(findProcessFunc func() (*ProcessInfo, error)) {
 	for {
 		select {
 		case <-ticker.C:
-			elapsedTime := time.Since(m.startMonitoringTime)
-			m.status = fmt.Sprintf("Looking for Guild Wars 2 process... (%.0f seconds)", elapsedTime.Seconds())
+			processInfo, err := m.findProcessFunc()
 
-			processInfo, err := findProcessFunc()
-			if err != nil {
-				m.logger.Debugw("Failed to find GW2 process", "error", err)
+			// If we can't find the process or there's an error
+			if err != nil || processInfo == nil {
+				if m.gw2ProcessFound {
+					// Process was found before but now it's gone
+					m.gw2ProcessFound = false
+					m.userConfirmed = false
+					m.processInfo = nil
+					m.tempProcessInfo = nil
+					m.status = "Guild Wars 2 process no longer detected. Please launch the game."
+					m.logger.Infow("GW2 process disappeared")
+				} else {
+					elapsedTime := time.Since(m.startMonitoringTime)
+					m.status = fmt.Sprintf("Looking for Guild Wars 2 process... (%.0f seconds)", elapsedTime.Seconds())
+				}
+				m.window.Invalidate()
+				if err != nil {
+					m.logger.Debugw("Failed to find GW2 process", "error", err)
+				}
 				continue
 			}
 
-			if processInfo != nil {
-				m.processInfo = processInfo
+			// Process found
+			m.tempProcessInfo = processInfo
+			if !m.gw2ProcessFound {
 				m.gw2ProcessFound = true
 				m.status = "Guild Wars 2 process found!"
 				m.logger.Infow("Found GW2 process",
@@ -174,12 +200,16 @@ func (m *Monitor) monitorProcess(findProcessFunc func() (*ProcessInfo, error)) {
 					"path", processInfo.ExecutablePath,
 					"workingDir", processInfo.WorkingDir,
 					"modules", len(processInfo.LoadedModules))
-				return
 			}
+			m.window.Invalidate()
 		}
 	}
 }
 
 func (m *Monitor) GetProcessInfo() *ProcessInfo {
+	// If the user skipped or we haven't confirmed yet, return nil
+	if !m.userConfirmed || m.processInfo == nil {
+		return nil
+	}
 	return m.processInfo
 }

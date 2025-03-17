@@ -47,8 +47,5 @@ func (sm *Menu) Run(gtx layout.Context, e app.FrameEvent) bool {
 			return btn.Layout(gtx)
 		}))
 
-	// Pass the drawing operations to the GPU.
-	e.Frame(gtx.Ops)
-
 	return clicked
 }

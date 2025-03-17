@@ -15,7 +15,7 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/process_modules"
-	"github.com/cheahjs/gw2-addon-setup-debug/ui/scan_directory"
+	"github.com/cheahjs/gw2-addon-setup-debug/utils"
 	"go.uber.org/zap"
 )
 
@@ -24,14 +24,14 @@ type Report struct {
 	saveButton   widget.Clickable
 	exitButton   widget.Clickable
 	gw2Dir       string
-	dllInfos     []*scan_directory.DllInfo
+	dllInfos     []*utils.DllInfo
 	processInfo  *process_modules.ProcessInfo
 	reportSaved  bool
 	saveLocation string
 	errorMessage string
 }
 
-func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*scan_directory.DllInfo, processInfo *process_modules.ProcessInfo) *Report {
+func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *process_modules.ProcessInfo) *Report {
 	return &Report{
 		logger:      logger,
 		saveButton:  widget.Clickable{},
@@ -79,7 +79,7 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 
 			// Add DLL info
 			summary.WriteString(fmt.Sprintf("- Found %d DLLs in directory\n", len(r.dllInfos)))
-			var arcdpsCount, addonLoaderCount, nexusCount int
+			var arcdpsCount, addonLoaderCount, nexusCount, arcdpsAddonCount, addonLoaderAddonCount, nexusAddonCount int
 			for _, dll := range r.dllInfos {
 				if dll.IsArcdps {
 					arcdpsCount++
@@ -90,10 +90,22 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 				if dll.IsNexus {
 					nexusCount++
 				}
+				if dll.IsArcdpsAddon {
+					arcdpsAddonCount++
+				}
+				if dll.IsAddonLoaderAddon {
+					addonLoaderAddonCount++
+				}
+				if dll.IsNexusAddon {
+					nexusAddonCount++
+				}
 			}
 			summary.WriteString(fmt.Sprintf("  - ArcDPS: %d\n", arcdpsCount))
+			summary.WriteString(fmt.Sprintf("  - ArcDPS Addon: %d\n", arcdpsAddonCount))
 			summary.WriteString(fmt.Sprintf("  - AddonLoader: %d\n", addonLoaderCount))
+			summary.WriteString(fmt.Sprintf("  - AddonLoader Addon: %d\n", addonLoaderAddonCount))
 			summary.WriteString(fmt.Sprintf("  - Nexus: %d\n", nexusCount))
+			summary.WriteString(fmt.Sprintf("  - Nexus Addon: %d\n", nexusAddonCount))
 
 			// Add process info
 			if r.processInfo != nil {
@@ -145,9 +157,6 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 			btn := material.Button(th, &r.exitButton, "Exit")
 			return btn.Layout(gtx)
 		}))
-
-	// Pass the drawing operations to the GPU.
-	e.Frame(gtx.Ops)
 
 	return false
 }

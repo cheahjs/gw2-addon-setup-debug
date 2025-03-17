@@ -8,7 +8,10 @@ import (
 
 	"github.com/cheahjs/gw2-addon-setup-debug/ui"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/process_modules"
-	"github.com/cheahjs/gw2-addon-setup-debug/ui/scan_directory"
+	"github.com/cheahjs/gw2-addon-setup-debug/utils"
+
+	"net/http"
+	_ "net/http/pprof"
 
 	"gioui.org/app"
 	"github.com/pkg/errors"
@@ -22,6 +25,9 @@ func main() {
 			println("Failed to delete gw2-addon-debug.log, log file will be appended to.")
 		}
 	}
+	go func() {
+		println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	// Initialize logger
 	logConfig := zap.NewDevelopmentConfig()
 	logConfig.OutputPaths = []string{"stdout", "gw2-addon-debug.log"}
@@ -36,12 +42,12 @@ func main() {
 	gui := ui.NewUI(logger)
 
 	// Register platform-specific functions
-	gui.SetScanDllFunc(func(dllPath string) (*scan_directory.DllInfo, error) {
-		return ScanDll(logger, dllPath)
+	gui.SetScanDllFunc(func(dllPath string) (*utils.DllInfo, error) {
+		return utils.ScanDll(logger, dllPath)
 	})
 
 	gui.SetFindProcessFunc(func() (*process_modules.ProcessInfo, error) {
-		return FindGW2Process()
+		return utils.FindGW2Process()
 	})
 
 	go func() {
