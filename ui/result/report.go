@@ -107,6 +107,12 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 					if dll.IsNexusAddon {
 						nexusAddonCount++
 					}
+					if dll.IsGw2Load {
+						gw2loadCount++
+					}
+					if dll.IsGw2LoadAddon {
+						gw2loadAddonCount++
+					}
 				}
 				summary.WriteString(fmt.Sprintf("  - ArcDPS: %d\n", arcdpsCount))
 				summary.WriteString(fmt.Sprintf("  - ArcDPS Addon: %d\n", arcdpsAddonCount))
@@ -114,6 +120,8 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 				summary.WriteString(fmt.Sprintf("  - AddonLoader Addon: %d\n", addonLoaderAddonCount))
 				summary.WriteString(fmt.Sprintf("  - Nexus: %d\n", nexusCount))
 				summary.WriteString(fmt.Sprintf("  - Nexus Addon: %d\n", nexusAddonCount))
+				summary.WriteString(fmt.Sprintf("  - GW2Load: %d\n", gw2loadCount))
+				summary.WriteString(fmt.Sprintf("  - GW2Load Addon: %d\n", gw2loadAddonCount))
 
 				// Add process info
 				if r.processInfo != nil {
