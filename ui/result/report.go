@@ -87,7 +87,7 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 
 				// Add DLL info
 				summary.WriteString(fmt.Sprintf("- Found %d DLLs in directory\n", len(r.dllInfos)))
-				var arcdpsCount, addonLoaderCount, nexusCount, arcdpsAddonCount, addonLoaderAddonCount, nexusAddonCount int
+				var arcdpsCount, addonLoaderCount, nexusCount, arcdpsAddonCount, addonLoaderAddonCount, nexusAddonCount, gw2loadCount, gw2loadAddonCount int
 				for _, dll := range r.dllInfos {
 					if dll.IsArcdps {
 						arcdpsCount++
@@ -214,7 +214,64 @@ func (r *Report) getWarningFlags() string {
 		}
 	}
 
+	addonLoaderInstalled, addonLoaderMessage := r.checkAddonLoaderInstallation()
+	if !addonLoaderInstalled {
+		flags.WriteString(addonLoaderMessage)
+	}
+
+	// If Nexus is installed, it's a addon manager so we don't need to check
+	// If Arcdps is installed, it's a addon manager so we don't need to check
+
 	return flags.String()
+}
+
+func (r *Report) checkAddonLoaderInstallation() (bool, string) {
+	// Check if addon loader is installed correctly
+	// It is installed correctly if:
+	// 1. d3d11.dll, dxgi.dll, bin64/cef/dxgi.dll are present and are addon loader shims
+	// 2. addons/lib_imgui/gw2addon_lib_imgui.dll is present and is an addon loader addon
+	var d3d11Shim, dxgiShim, cefDxgiShim, libImguiAddon bool
+	for _, dll := range r.dllInfos {
+		// Check if d3d11.dll is present and is an addon loader shim
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "d3d11.dll")) && dll.IsAddonLoaderShim {
+			d3d11Shim = true
+		}
+		// Check if dxgi.dll is present and is an addon loader shim
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "dxgi.dll")) && dll.IsAddonLoaderShim {
+			dxgiShim = true
+		}
+		// Check if bin64/cef/dxgi.dll is present and is an addon loader shim
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "bin64", "cef", "dxgi.dll")) && dll.IsAddonLoaderShim {
+			cefDxgiShim = true
+		}
+		// Check if addons/lib_imgui/gw2addon_lib_imgui.dll is present and is an addon loader addon
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "addons", "lib_imgui", "gw2addon_lib_imgui.dll")) && dll.IsAddonLoaderAddon {
+			libImguiAddon = true
+		}
+	}
+
+	if d3d11Shim && dxgiShim && cefDxgiShim && libImguiAddon {
+		return true, ""
+	}
+	// none of addon loader shims are present, so it is not installed
+	if !d3d11Shim && !dxgiShim && !cefDxgiShim {
+		return true, ""
+	}
+	var builder strings.Builder
+	builder.WriteString("Addon Loader is not installed correctly - please reinstall with GW2 Addon Manager\n")
+	if !d3d11Shim {
+		builder.WriteString("  - d3d11.dll is missing or is not the addon loader\n")
+	}
+	if !dxgiShim {
+		builder.WriteString("  - dxgi.dll is missing or is not the addon loader\n")
+	}
+	if !cefDxgiShim {
+		builder.WriteString("  - bin64/cef/dxgi.dll is missing or is not the addon loader\n")
+	}
+	if !libImguiAddon {
+		builder.WriteString("  - addons/lib_imgui/gw2addon_lib_imgui.dll is missing\n")
+	}
+	return false, builder.String()
 }
 
 func (r *Report) saveReport() {
