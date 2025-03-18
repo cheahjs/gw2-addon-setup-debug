@@ -32,6 +32,8 @@ type DllInfo struct {
 	IsAddonLoaderAddon bool
 	IsNexus            bool
 	IsNexusAddon       bool
+	IsGw2Load          bool
+	IsGw2LoadAddon     bool
 	IsD3D11Shim        bool
 	IsDXGIShim         bool
 	FileVersion        WinVersion
@@ -39,8 +41,22 @@ type DllInfo struct {
 }
 
 func (info *DllInfo) String() string {
-	return fmt.Sprintf("md5sum: %v, isArcdps: %v, isArcdpsAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, fileVersion: %v",
-		info.Md5sum, info.IsArcdps, info.IsArcdpsAddon, info.IsAddonLoaderShim, info.IsAddonLoaderCore, info.IsAddonLoaderAddon, info.IsNexus, info.IsNexusAddon, info.IsD3D11Shim, info.IsDXGIShim, info.FileVersion)
+	return fmt.Sprintf(
+		"md5sum: %v, isArcdps: %v, isArcdpsAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, isGw2Load: %v, isGw2LoadAddon: %v, fileVersion: %v",
+		info.Md5sum,
+		info.IsArcdps,
+		info.IsArcdpsAddon,
+		info.IsAddonLoaderShim,
+		info.IsAddonLoaderCore,
+		info.IsAddonLoaderAddon,
+		info.IsNexus,
+		info.IsNexusAddon,
+		info.IsD3D11Shim,
+		info.IsDXGIShim,
+		info.IsGw2Load,
+		info.IsGw2LoadAddon,
+		info.FileVersion,
+	)
 }
 
 // parseDll parses a DLL and returns information about the DLL
@@ -57,6 +73,11 @@ func parseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 	if err = peFile.Parse(); err != nil {
 		return nil, errors.Wrapf(err, "failed to parse PE file %s", dllPath)
 	}
+	// Make a map of the exports
+	exports := make(map[string]struct{})
+	for _, export := range peFile.Export.Functions {
+		exports[export.Name] = struct{}{}
+	}
 
 	// Get file version if available
 	if winVersion, err := GetFileVersion(dllPath); err == nil {
@@ -69,86 +90,81 @@ func parseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 	}
 
 	// Check if the DLL is a D3D11 shim
-	if isD3D11Shim(peFile) {
+	if isD3D11Shim(exports) {
 		info.IsD3D11Shim = true
 	}
 
 	// Check if the DLL is a DXGI shim
-	if isDXGIShim(peFile) {
+	if isDXGIShim(exports) {
 		info.IsDXGIShim = true
 	}
 
 	// Check if the DLL is arcdps
-	if isArcdps(peFile) {
+	if isArcdps(exports) {
 		info.IsArcdps = true
 	}
 
 	// Check if the DLL is an arcdps addon
-	if isArcdpsAddon(peFile) {
+	if isArcdpsAddon(exports) {
 		info.IsArcdpsAddon = true
 	}
 
 	// Check if the DLL is an addon loader shim
-	if isAddonLoaderShim(peFile, dllPath) {
+	if isAddonLoaderShim(exports, dllPath) {
 		info.IsAddonLoaderShim = true
 	}
 
 	// Check if the DLL is an addon loader core
-	if isAddonLoaderCore(peFile, dllPath) {
+	if isAddonLoaderCore(exports, dllPath) {
 		info.IsAddonLoaderCore = true
 	}
 
 	// Check if the DLL is an addon loader addon
-	if isAddonLoaderAddon(peFile) {
+	if isAddonLoaderAddon(exports) {
 		info.IsAddonLoaderAddon = true
 	}
 
 	// Check if the DLL is Nexus
-	if isNexus(peFile, dllPath) {
+	if isNexus(exports, dllPath) {
 		info.IsNexus = true
 	}
 
 	// Check if the DLL is a Nexus addon
-	if isNexusAddon(peFile) {
+	if isNexusAddon(exports) {
 		info.IsNexusAddon = true
+	}
+
+	// Check if the DLL is Gw2Load
+	if isGw2Load(exports) {
+		info.IsGw2Load = true
+	}
+
+	// Check if the DLL is a Gw2Load addon
+	if isGw2LoadAddon(exports) {
+		info.IsGw2LoadAddon = true
 	}
 
 	return info, nil
 }
 
-func isArcdps(peFile *peparser.File) bool {
-	// Check for e0
-	for _, export := range peFile.Export.Functions {
-		if export.Name == "e0" {
-			return true
-		}
-	}
-	return false
+func isArcdps(exports map[string]struct{}) bool {
+	_, exists := exports["e0"]
+	return exists
 }
 
-func isArcdpsAddon(peFile *peparser.File) bool {
-	// Check for get_init_addr
-	for _, export := range peFile.Export.Functions {
-		if export.Name == "get_init_addr" {
-			return true
-		}
-	}
-	return false
+func isArcdpsAddon(exports map[string]struct{}) bool {
+	_, exists := exports["get_init_addr"]
+	return exists
 }
 
-func isAddonLoaderAddon(peFile *peparser.File) bool {
-	// Check for gw2addon_load
-	for _, export := range peFile.Export.Functions {
-		if export.Name == "gw2addon_load" {
-			return true
-		}
-	}
-	return false
+func isAddonLoaderAddon(exports map[string]struct{}) bool {
+	_, exists := exports["gw2addon_load"]
+	return exists
 }
 
-func isNexus(peFile *peparser.File, dllPath string) bool {
+func isNexus(exports map[string]struct{}, dllPath string) bool {
 	// Check if it is a shim
-	if !isD3D11Shim(peFile) {
+	if !isD3D11Shim(exports) {
 		return false
 	}
 	// Check for the Nexus API URL
@@ -159,39 +175,24 @@ func isNexus(peFile *peparser.File, dllPath string) bool {
 	return apiUrlPresent
 }
 
-func isNexusAddon(peFile *peparser.File) bool {
-	// Check for GetAddonDef
-	for _, export := range peFile.Export.Functions {
-		if export.Name == "GetAddonDef" {
-			return true
-		}
-	}
-	return false
+func isNexusAddon(exports map[string]struct{}) bool {
+	_, exists := exports["GetAddonDef"]
+	return exists
 }
 
-func isDXGIShim(peFile *peparser.File) bool {
-	// Check for CreateDXGIFactory
-	for _, export := range peFile.Export.Functions {
-		if export.Name == "CreateDXGIFactory" {
-			return true
-		}
-	}
-	return false
+func isDXGIShim(exports map[string]struct{}) bool {
+	_, exists := exports["CreateDXGIFactory"]
+	return exists
 }
 
-func isD3D11Shim(peFile *peparser.File) bool {
-	// Check for D3D11CreateDevice
-	for _, export := range peFile.Export.Functions {
-		if export.Name == "D3D11CreateDevice" {
-			return true
-		}
-	}
-	return false
+func isD3D11Shim(exports map[string]struct{}) bool {
+	_, exists := exports["D3D11CreateDevice"]
+	return exists
 }
 
-func isAddonLoaderShim(peFile *peparser.File, dllPath string) bool {
+func isAddonLoaderShim(exports map[string]struct{}, dllPath string) bool {
 	// The shim must be one of dxgi.dll or d3d11.dll
-	if !isDXGIShim(peFile) && !isD3D11Shim(peFile) {
+	if !isDXGIShim(exports) && !isD3D11Shim(exports) {
 		return false
 	}
 	// Check if there's an addonLoader.dll string
@@ -202,8 +203,8 @@ func isAddonLoaderShim(peFile *peparser.File, dllPath string) bool {
 	return loaderStringPresent
 }
 
-func isAddonLoaderCore(peFile *peparser.File, dllPath string) bool {
-	if !isDXGIShim(peFile) || !isD3D11Shim(peFile) {
+func isAddonLoaderCore(exports map[string]struct{}, dllPath string) bool {
+	if !isDXGIShim(exports) || !isD3D11Shim(exports) {
 		return false
 	}
 	// Check if there's the description string
@@ -212,6 +213,16 @@ func isAddonLoaderCore(peFile *peparser.File, dllPath string) bool {
 		return false
 	}
 	return loaderStringPresent
+}
+
+func isGw2Load(exports map[string]struct{}) bool {
+	_, exists := exports["GW2Load_CheckIfAddon"]
+	return exists
+}
+
+func isGw2LoadAddon(exports map[string]struct{}) bool {
+	_, exists := exports["GW2Load_GetAddonAPIVersion"]
+	return exists
 }
 
 func asciiToWideString(s string) []byte {

@@ -212,6 +212,9 @@ func (r *Report) saveReport() {
 		if r.dllInfos[i].IsAddonLoaderShim != r.dllInfos[j].IsAddonLoaderShim {
 			return r.dllInfos[i].IsAddonLoaderShim
 		}
+		if r.dllInfos[i].IsGw2Load != r.dllInfos[j].IsGw2Load {
+			return r.dllInfos[i].IsGw2Load
+		}
 		if r.dllInfos[i].IsD3D11Shim != r.dllInfos[j].IsD3D11Shim {
 			return r.dllInfos[i].IsD3D11Shim
 		}
@@ -229,6 +232,9 @@ func (r *Report) saveReport() {
 		}
 		if r.dllInfos[i].IsArcdpsAddon != r.dllInfos[j].IsArcdpsAddon {
 			return r.dllInfos[i].IsArcdpsAddon
+		}
+		if r.dllInfos[i].IsGw2LoadAddon != r.dllInfos[j].IsGw2LoadAddon {
+			return r.dllInfos[i].IsGw2LoadAddon
 		}
 		return r.dllInfos[i].FilePath < r.dllInfos[j].FilePath
 	})
@@ -277,6 +283,12 @@ func (r *Report) saveReport() {
 		}
 		if dll.IsArcdpsAddon {
 			flags.WriteString("[ArcdpsAddon] ")
+		}
+		if dll.IsGw2Load {
+			flags.WriteString("[Gw2Load] ")
+		}
+		if dll.IsGw2LoadAddon {
+			flags.WriteString("[Gw2LoadAddon] ")
 		}
 		if flags.Len() > 0 {
 			flags.WriteString("\n")
@@ -346,7 +358,7 @@ func (r *Report) saveReport() {
 
 				// Show file size for files
 				if !info.IsDir() {
-					report.WriteString(fmt.Sprintf("%s%s (%d bytes)\n", indent, filepath.Base(file), info.Size()))
+					report.WriteString(fmt.Sprintf("%s%s (%d bytes, %s)\n", indent, filepath.Base(file), info.Size(), info.ModTime().Format(time.RFC1123)))
 				} else {
 					report.WriteString(fmt.Sprintf("%s%s/ (directory)\n", indent, filepath.Base(file)))
 					// Recursively list subdirectory contents
