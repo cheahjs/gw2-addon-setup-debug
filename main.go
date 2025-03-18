@@ -2,9 +2,6 @@ package main
 
 import (
 	"os"
-	"path"
-	"path/filepath"
-	"strings"
 
 	"github.com/cheahjs/gw2-addon-setup-debug/ui"
 	"github.com/cheahjs/gw2-addon-setup-debug/utils"
