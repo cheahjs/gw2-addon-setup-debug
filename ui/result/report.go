@@ -290,6 +290,9 @@ func (r *Report) saveReport() {
 		if dll.IsGw2LoadAddon {
 			flags.WriteString("[Gw2LoadAddon] ")
 		}
+		if dll.IsQuarantined {
+			flags.WriteString("[Quarantined] ")
+		}
 		if flags.Len() > 0 {
 			flags.WriteString("\n")
 			report.WriteString("  " + flags.String())
@@ -391,8 +394,8 @@ func (r *Report) saveReport() {
 	r.reportSaved = true
 	r.logger.Infow("Report saved", "path", absPath)
 
-	// Open the folder containing the report
-	err = exec.Command("explorer", "/select,", absPath).Run()
+	// Open and focus explorer window showing the report
+	err = exec.Command("explorer.exe", "/e,/select,", absPath).Run()
 	if err != nil {
 		r.logger.Errorw("Failed to open report folder", "error", err)
 	}

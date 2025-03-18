@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/pkg/errors"
 	peparser "github.com/saferwall/pe"
@@ -36,13 +37,14 @@ type DllInfo struct {
 	IsGw2LoadAddon     bool
 	IsD3D11Shim        bool
 	IsDXGIShim         bool
+	IsQuarantined      bool
 	FileVersion        WinVersion
 	Error              string
 }
 
 func (info *DllInfo) String() string {
 	return fmt.Sprintf(
-		"md5sum: %v, isArcdps: %v, isArcdpsAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, isGw2Load: %v, isGw2LoadAddon: %v, fileVersion: %v",
+		"md5sum: %v, isArcdps: %v, isArcdpsAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, isGw2Load: %v, isGw2LoadAddon: %v, isQuarantined: %v, fileVersion: %v",
 		info.Md5sum,
 		info.IsArcdps,
 		info.IsArcdpsAddon,
@@ -55,6 +57,7 @@ func (info *DllInfo) String() string {
 		info.IsDXGIShim,
 		info.IsGw2Load,
 		info.IsGw2LoadAddon,
+		info.IsQuarantined,
 		info.FileVersion,
 	)
 }
@@ -64,6 +67,12 @@ func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 	info := &DllInfo{
 		FilePath: dllPath,
 	}
+
+	// Check if file is quarantined by Windows
+	if isQuarantined, err := checkFileQuarantined(dllPath); err == nil {
+		info.IsQuarantined = isQuarantined
+	}
+
 	// Parse PE file
 	peFile, err := peparser.New(dllPath, &peparser.Options{})
 	if err != nil {
@@ -312,4 +321,28 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func checkFileQuarantined(filePath string) (bool, error) {
+	// Windows stores Zone.Identifier as an alternate data stream
+	zoneIdentifierPath := filePath + ":Zone.Identifier"
+
+	// Try to open the Zone.Identifier stream
+	file, err := os.Open(zoneIdentifierPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil // File is not quarantined
+		}
+		return false, err
+	}
+	defer file.Close()
+
+	// Read the contents to check for ZoneId=3 (Internet) or ZoneId=4 (Restricted)
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return false, err
+	}
+
+	contentStr := string(content)
+	return strings.Contains(contentStr, "ZoneId=3") || strings.Contains(contentStr, "ZoneId=4"), nil
 }
