@@ -36,7 +36,7 @@ func main() {
 
 	// Register platform-specific functions
 	gui.SetScanDllFunc(func(dllPath string) (*utils.DllInfo, error) {
-		return utils.ScanDll(logger, dllPath)
+		return utils.ParseDll(logger, dllPath)
 	})
 
 	gui.SetFindProcessFunc(func() (*utils.ProcessInfo, error) {

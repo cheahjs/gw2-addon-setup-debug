@@ -59,8 +59,8 @@ func (info *DllInfo) String() string {
 	)
 }
 
-// parseDll parses a DLL and returns information about the DLL
-func parseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
+// ParseDll parses a DLL and returns information about the DLL
+func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 	info := &DllInfo{
 		FilePath: dllPath,
 	}
