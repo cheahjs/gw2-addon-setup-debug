@@ -62,6 +62,47 @@ func (info *DllInfo) String() string {
 	)
 }
 
+func (info *DllInfo) Flags() string {
+	var flags strings.Builder
+	if info.IsNexus {
+		flags.WriteString("[Nexus] ")
+	}
+	if info.IsArcdps {
+		flags.WriteString("[Arcdps] ")
+	}
+	if info.IsAddonLoaderShim {
+		flags.WriteString("[AddonLoaderShim] ")
+	}
+	if info.IsD3D11Shim {
+		flags.WriteString("[D3D11Shim] ")
+	}
+	if info.IsDXGIShim {
+		flags.WriteString("[DXGIShim] ")
+	}
+	if info.IsAddonLoaderCore {
+		flags.WriteString("[AddonLoaderCore] ")
+	}
+	if info.IsAddonLoaderAddon {
+		flags.WriteString("[AddonLoaderAddon] ")
+	}
+	if info.IsNexusAddon {
+		flags.WriteString("[NexusAddon] ")
+	}
+	if info.IsArcdpsAddon {
+		flags.WriteString("[ArcdpsAddon] ")
+	}
+	if info.IsGw2Load {
+		flags.WriteString("[Gw2Load] ")
+	}
+	if info.IsGw2LoadAddon {
+		flags.WriteString("[Gw2LoadAddon] ")
+	}
+	if info.IsQuarantined {
+		flags.WriteString("[Quarantined] ")
+	}
+	return flags.String()
+}
+
 // ParseDll parses a DLL and returns information about the DLL
 func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 	info := &DllInfo{

@@ -121,6 +121,28 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 					summary.WriteString(fmt.Sprintf("  - Executable: %s\n", r.processInfo.ExecutablePath))
 					summary.WriteString(fmt.Sprintf("  - Working Directory: %s\n", r.processInfo.WorkingDir))
 					summary.WriteString(fmt.Sprintf("  - Loaded modules: %d\n", len(r.processInfo.LoadedModules)))
+					summary.WriteString(fmt.Sprintf("  - Loaded shims:\n"))
+					exeDir := filepath.Dir(r.processInfo.ExecutablePath)
+					for _, module := range r.processInfo.LoadedModules {
+						// Check if the module is a shim loaded at gw2Dir/{d3d11,dxgi,msimg32}.dll and gw2Dir/bin64/cef/dxgi.dll
+						if strings.EqualFold(module.ModuleName, filepath.Join(exeDir, "d3d11.dll")) ||
+							strings.EqualFold(module.ModuleName, filepath.Join(exeDir, "dxgi.dll")) ||
+							strings.EqualFold(module.ModuleName, filepath.Join(exeDir, "msimg32.dll")) ||
+							strings.EqualFold(module.ModuleName, filepath.Join(exeDir, "bin64", "cef", "dxgi.dll")) {
+							// Find the dll info for the module if it exists
+							found := false
+							for _, dll := range r.dllInfos {
+								if strings.EqualFold(dll.FilePath, module.ModuleName) {
+									summary.WriteString(fmt.Sprintf("    - %s (%s)\n", module.ModuleName, strings.TrimSpace(dll.Flags())))
+									found = true
+									break
+								}
+							}
+							if !found {
+								summary.WriteString(fmt.Sprintf("    - %s (unknown shim)\n", module.ModuleName))
+							}
+						}
+					}
 				} else {
 					summary.WriteString("- No GW2 process info captured\n")
 				}
@@ -201,7 +223,6 @@ func (r *Report) saveReport() {
 
 	// Add DLL info
 	report.WriteString(fmt.Sprintf("=== DLLs in Directory (%d total) ===\n", len(r.dllInfos)))
-	// Sort DLLs by IsNexus, IsArcdps, IsAddonLoaderShim, IsD3D11Shim, IsDXGIShim, IsAddonLoaderCore, IsAddonLoaderAddon, IsNexusAddon, IsArcdpsAddon, then alphabetically
 	sort.Slice(r.dllInfos, func(i, j int) bool {
 		if r.dllInfos[i].IsNexus != r.dllInfos[j].IsNexus {
 			return r.dllInfos[i].IsNexus
@@ -256,46 +277,11 @@ func (r *Report) saveReport() {
 		}
 		report.WriteString("\n")
 		// Add a header with all the flags
-		var flags strings.Builder
-		if dll.IsNexus {
-			flags.WriteString("[Nexus] ")
-		}
-		if dll.IsArcdps {
-			flags.WriteString("[Arcdps] ")
-		}
-		if dll.IsAddonLoaderShim {
-			flags.WriteString("[AddonLoaderShim] ")
-		}
-		if dll.IsD3D11Shim {
-			flags.WriteString("[D3D11Shim] ")
-		}
-		if dll.IsDXGIShim {
-			flags.WriteString("[DXGIShim] ")
-		}
-		if dll.IsAddonLoaderCore {
-			flags.WriteString("[AddonLoaderCore] ")
-		}
-		if dll.IsAddonLoaderAddon {
-			flags.WriteString("[AddonLoaderAddon] ")
-		}
-		if dll.IsNexusAddon {
-			flags.WriteString("[NexusAddon] ")
-		}
-		if dll.IsArcdpsAddon {
-			flags.WriteString("[ArcdpsAddon] ")
-		}
-		if dll.IsGw2Load {
-			flags.WriteString("[Gw2Load] ")
-		}
-		if dll.IsGw2LoadAddon {
-			flags.WriteString("[Gw2LoadAddon] ")
-		}
-		if dll.IsQuarantined {
-			flags.WriteString("[Quarantined] ")
-		}
-		if flags.Len() > 0 {
-			flags.WriteString("\n")
-			report.WriteString("  " + flags.String())
+		flags := dll.Flags()
+		if flags != "" {
+			report.WriteString("  ")
+			report.WriteString(flags)
+			report.WriteString("\n")
 		}
 		report.WriteString(fmt.Sprintf("  Path: %s\n", dll.FilePath))
 		if dll.Error != "" {
