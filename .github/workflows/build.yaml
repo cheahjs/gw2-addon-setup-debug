@@ -18,8 +18,33 @@ jobs:
       - name: Install dependencies
         run: go get .
 
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "version=${VERSION}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=999.999.999.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build
-        run: go tool gogio -target windows -arch amd64 -buildmode=exe -o gw2-addon-setup-debug.exe .
+        shell: bash
+        run: |
+          go tool gogio \
+            -target=windows \
+            -arch=amd64 \
+            -buildmode=exe \
+            -version=${{ steps.version.outputs.version }} \
+            -name="Guild Wars 2 Addon Setup Debugger" \
+            -icon=appicon.png \
+            -o="Guild Wars 2 Addon Setup Debugger.exe" \
+            .
+
+      - name: Rename file
+        shell: bash
+        run: mv "Guild Wars 2 Addon Setup Debugger.exe" gw2-addon-setup-debug.exe
 
       - name: Upload build
         uses: actions/upload-artifact@v4
