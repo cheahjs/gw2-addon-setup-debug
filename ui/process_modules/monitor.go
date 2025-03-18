@@ -21,7 +21,6 @@ type Monitor struct {
 	confirmButton       widget.Clickable
 	skipButton          widget.Clickable
 	monitoringStarted   bool
-	monitoringDone      bool
 	userConfirmed       bool
 	userSkipped         bool
 	status              string

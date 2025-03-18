@@ -74,7 +74,21 @@ func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 	}
 
 	// Parse PE file
-	peFile, err := peparser.New(dllPath, &peparser.Options{})
+	peFile, err := peparser.New(dllPath, &peparser.Options{
+		OmitImportDirectory:       true,
+		OmitSecurityDirectory:     true,
+		OmitRelocDirectory:        true,
+		OmitDebugDirectory:        true,
+		OmitArchitectureDirectory: true,
+		OmitGlobalPtrDirectory:    true,
+		OmitTLSDirectory:          true,
+		OmitLoadConfigDirectory:   true,
+		OmitBoundImportDirectory:  true,
+		OmitIATDirectory:          true,
+		OmitDelayImportDirectory:  true,
+		OmitCLRHeaderDirectory:    true,
+		OmitCLRMetadata:           true,
+	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to open PE file %s", dllPath)
 	}
