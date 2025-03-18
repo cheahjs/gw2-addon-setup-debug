@@ -38,13 +38,14 @@ type DllInfo struct {
 	IsD3D11Shim        bool
 	IsDXGIShim         bool
 	IsQuarantined      bool
+	IsReshade          bool
 	FileVersion        WinVersion
 	Error              string
 }
 
 func (info *DllInfo) String() string {
 	return fmt.Sprintf(
-		"md5sum: %v, isArcdps: %v, isArcdpsAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, isGw2Load: %v, isGw2LoadAddon: %v, isQuarantined: %v, fileVersion: %v",
+		"md5sum: %v, isArcdps: %v, isArcdpsAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, isGw2Load: %v, isGw2LoadAddon: %v, isQuarantined: %v, isReshade: %v, fileVersion: %v",
 		info.Md5sum,
 		info.IsArcdps,
 		info.IsArcdpsAddon,
@@ -58,6 +59,7 @@ func (info *DllInfo) String() string {
 		info.IsGw2Load,
 		info.IsGw2LoadAddon,
 		info.IsQuarantined,
+		info.IsReshade,
 		info.FileVersion,
 	)
 }
@@ -96,6 +98,9 @@ func (info *DllInfo) Flags() string {
 	}
 	if info.IsGw2LoadAddon {
 		flags.WriteString("[Gw2LoadAddon] ")
+	}
+	if info.IsReshade {
+		flags.WriteString("[Reshade] ")
 	}
 	if info.IsQuarantined {
 		flags.WriteString("[Quarantined] ")
@@ -208,6 +213,11 @@ func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 		info.IsGw2LoadAddon = true
 	}
 
+	// Check if the DLL is Reshade
+	if isReshade(exports) {
+		info.IsReshade = true
+	}
+
 	return info, nil
 }
 
@@ -286,6 +296,11 @@ func isGw2Load(exports map[string]struct{}) bool {
 
 func isGw2LoadAddon(exports map[string]struct{}) bool {
 	_, exists := exports["GW2Load_GetAddonAPIVersion"]
+	return exists
+}
+
+func isReshade(exports map[string]struct{}) bool {
+	_, exists := exports["ReShadeVersion"]
 	return exists
 }
 
