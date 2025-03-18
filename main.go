@@ -16,14 +16,14 @@ import (
 
 func main() {
 	// Delete log file if it exists, on a best effort basis
-	if _, err := os.Stat("gw2-addon-debug.log"); err == nil {
-		if err := os.Remove("gw2-addon-debug.log"); err != nil {
-			println("Failed to delete gw2-addon-debug.log, log file will be appended to.")
+	if _, err := os.Stat("gw2-addon-setup-debug.log"); err == nil {
+		if err := os.Remove("gw2-addon-setup-debug.log"); err != nil {
+			println("Failed to delete gw2-addon-setup-debug.log, log file will be appended to.")
 		}
 	}
 	// Initialize logger
 	logConfig := zap.NewDevelopmentConfig()
-	logConfig.OutputPaths = []string{"stdout", "gw2-addon-debug.log"}
+	logConfig.OutputPaths = []string{"stdout", "gw2-addon-setup-debug.log"}
 	rawLogger, err := logConfig.Build()
 	if err != nil {
 		panic(errors.Wrap(err, "failed to initialize logger"))
