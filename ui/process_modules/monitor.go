@@ -133,16 +133,16 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 
 				children := []layout.FlexChild{
 					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						btn := material.Button(th, &m.skipButton, "Skip this step")
+						return btn.Layout(gtx)
+					}),
+					layout.Rigid(layout.Spacer{Width: 10}.Layout),
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 						if m.gw2ProcessFound {
 							btn := material.Button(th, &m.confirmButton, "I'm at the character selection screen")
 							return btn.Layout(gtx)
 						}
 						return layout.Dimensions{}
-					}),
-					layout.Rigid(layout.Spacer{Width: 10}.Layout),
-					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						btn := material.Button(th, &m.skipButton, "Skip this step")
-						return btn.Layout(gtx)
 					}),
 				}
 
