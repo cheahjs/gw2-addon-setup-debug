@@ -1,8 +1,11 @@
 package ui
 
 import (
+	"os"
+
 	"gioui.org/app"
 	"gioui.org/op"
+	"github.com/cheahjs/gw2-addon-setup-debug/ui/admin"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/process_modules"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/result"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/scan_directory"
@@ -17,6 +20,7 @@ type UI struct {
 
 	// UI Components
 	startMenu       *start.Menu
+	adminCheck      *admin.AdminCheck
 	directoryPicker *select_directory.Directory
 	dllScanner      *scan_directory.Scanner
 	processMonitor  *process_modules.Monitor
@@ -39,6 +43,7 @@ func NewUI(logger *zap.SugaredLogger) *UI {
 	return &UI{
 		Logger:          logger,
 		startMenu:       start.NewMenu(),
+		adminCheck:      admin.NewAdminCheck(logger),
 		directoryPicker: select_directory.NewDirectory(logger),
 		currentState:    startMenuState,
 	}
@@ -66,6 +71,27 @@ func (ui *UI) Run(w *app.Window) error {
 			switch ui.currentState {
 			case startMenuState:
 				if ui.startMenu.Run(gtx, e) {
+					// Check if we're already running as admin
+					isAdmin, err := utils.IsRunningAsAdmin()
+					if err != nil {
+						ui.Logger.Errorw("Failed to check admin status", "error", err)
+						// Continue to admin check screen on error to be safe
+						ui.currentState = adminCheckState
+					} else if isAdmin {
+						// Skip admin check if already running as admin
+						ui.currentState = selectDirectoryState
+					} else {
+						ui.currentState = adminCheckState
+					}
+				}
+
+			case adminCheckState:
+				continueToNext, shouldElevate := ui.adminCheck.Run(gtx, e)
+				if continueToNext {
+					if shouldElevate {
+						// Exit the current process - the elevated process will take over
+						os.Exit(0)
+					}
 					ui.currentState = selectDirectoryState
 				}
 

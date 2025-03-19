@@ -5,6 +5,8 @@ type uiState int
 const (
 	// Start menu
 	startMenuState uiState = iota
+	// Admin check screen
+	adminCheckState
 	// Select GW2 directory
 	selectDirectoryState
 	// Scan DLLs in directory
