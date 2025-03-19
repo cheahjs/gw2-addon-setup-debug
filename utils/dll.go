@@ -40,13 +40,19 @@ type DllInfo struct {
 	IsQuarantined      bool
 	IsReshade          bool
 	FileVersion        WinVersion
+	FileDescription    string
+	ProductName        string
+	ProductVersion     string
 	Error              string
 }
 
 func (info *DllInfo) String() string {
 	return fmt.Sprintf(
-		"md5sum: %v, isArcdps: %v, isArcdpsAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, isGw2Load: %v, isGw2LoadAddon: %v, isQuarantined: %v, isReshade: %v, fileVersion: %v",
+		"md5sum: %v, fileDesc: %v, productName: %v, productVer: %v, isArcdps: %v, isArcdpsAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, isGw2Load: %v, isGw2LoadAddon: %v, isQuarantined: %v, isReshade: %v, fileVersion: %v",
 		info.Md5sum,
+		info.FileDescription,
+		info.ProductName,
+		info.ProductVersion,
 		info.IsArcdps,
 		info.IsArcdpsAddon,
 		info.IsAddonLoaderShim,
@@ -117,6 +123,13 @@ func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 	// Check if file is quarantined by Windows
 	if isQuarantined, err := checkFileQuarantined(dllPath); err == nil {
 		info.IsQuarantined = isQuarantined
+	}
+
+	// Get file version strings
+	if fileDesc, prodName, prodVer, err := GetFileVersionStrings(dllPath); err == nil {
+		info.FileDescription = fileDesc
+		info.ProductName = prodName
+		info.ProductVersion = prodVer
 	}
 
 	// Parse PE file

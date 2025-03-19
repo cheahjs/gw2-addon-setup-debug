@@ -361,6 +361,15 @@ func (r *Report) saveReport() {
 		} else {
 			report.WriteString(fmt.Sprintf("  MD5: %s\n", dll.Md5sum))
 			report.WriteString(fmt.Sprintf("  Version: %d.%d.%d.%d\n", dll.FileVersion.Major, dll.FileVersion.Minor, dll.FileVersion.Patch, dll.FileVersion.Build))
+			if dll.FileDescription != "" {
+				report.WriteString(fmt.Sprintf("  Description: %s\n", dll.FileDescription))
+			}
+			if dll.ProductName != "" {
+				report.WriteString(fmt.Sprintf("  Product: %s\n", dll.ProductName))
+			}
+			if dll.ProductVersion != "" {
+				report.WriteString(fmt.Sprintf("  Product Version: %s\n", dll.ProductVersion))
+			}
 		}
 		report.WriteString("\n")
 	}
