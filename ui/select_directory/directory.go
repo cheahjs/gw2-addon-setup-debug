@@ -24,6 +24,8 @@ type Directory struct {
 	isValid           bool
 	fileExplorer      *explorer.Explorer
 	includeDirListing widget.Bool
+	includeLogs       widget.Bool
+	hasArcdpsLogs     bool
 }
 
 func NewDirectory(logger *zap.SugaredLogger) *Directory {
@@ -32,10 +34,11 @@ func NewDirectory(logger *zap.SugaredLogger) *Directory {
 		selectButton:      widget.Clickable{},
 		continueButton:    widget.Clickable{},
 		includeDirListing: widget.Bool{Value: true}, // Include directory listing by default
+		includeLogs:       widget.Bool{Value: true}, // Include logs by default if they exist
 	}
 }
 
-func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bool, string, bool) {
+func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bool, string, bool, bool) {
 	th := material.NewTheme()
 
 	if d.fileExplorer == nil {
@@ -76,7 +79,7 @@ func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bo
 
 	// Continue button clicked and directory is valid
 	if d.continueButton.Clicked(gtx) && d.isValid {
-		return true, d.directory, d.includeDirListing.Value
+		return true, d.directory, d.includeDirListing.Value, d.hasArcdpsLogs && d.includeLogs.Value
 	}
 
 	layout.Flex{
@@ -130,6 +133,17 @@ func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bo
 			layout.Spacer{Height: 10}.Layout,
 		),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if d.isValid && d.hasArcdpsLogs {
+				// Add checkbox for arcdps logs
+				checkbox := material.CheckBox(th, &d.includeLogs, "Include arcdps logs in report")
+				return checkbox.Layout(gtx)
+			}
+			return layout.Dimensions{}
+		}),
+		layout.Rigid(
+			layout.Spacer{Height: 10}.Layout,
+		),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if d.isValid {
 				btn := material.Button(th, &d.continueButton, "Continue")
 				return btn.Layout(gtx)
@@ -137,7 +151,7 @@ func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bo
 			return layout.Dimensions{}
 		}))
 
-	return false, "", false
+	return false, "", false, false
 }
 
 func (d *Directory) validateDirectory() {
@@ -157,6 +171,14 @@ func (d *Directory) validateDirectory() {
 		d.errorMessage = "Gw2.dat not found. Please select the correct Guild Wars 2 directory."
 		d.isValid = false
 		return
+	}
+
+	// Check for arcdps logs
+	_, err1 := os.Stat(path.Join(d.directory, "addons/arcdps/arcdps.log"))
+	_, err2 := os.Stat(path.Join(d.directory, "addons/arcdps/arcdps_lastcrash.log"))
+	d.hasArcdpsLogs = err1 == nil || err2 == nil
+	if d.hasArcdpsLogs {
+		d.logger.Infow("Found arcdps logs", "path", d.directory)
 	}
 
 	d.errorMessage = ""

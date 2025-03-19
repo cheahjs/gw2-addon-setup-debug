@@ -31,6 +31,7 @@ type UI struct {
 	// Data passed between screens
 	gw2Directory      string
 	includeDirListing bool
+	includeLogs       bool
 	dllInfos          []*utils.DllInfo
 	processInfo       *utils.ProcessInfo
 
@@ -96,10 +97,11 @@ func (ui *UI) Run(w *app.Window) error {
 				}
 
 			case selectDirectoryState:
-				continueToNextStep, selectedDir, includeDirListing := ui.directoryPicker.Run(w, gtx, e)
+				continueToNextStep, selectedDir, includeDirListing, includeLogs := ui.directoryPicker.Run(w, gtx, e)
 				if continueToNextStep {
 					ui.gw2Directory = selectedDir
 					ui.includeDirListing = includeDirListing
+					ui.includeLogs = includeLogs
 					ui.dllScanner = scan_directory.NewScanner(ui.Logger, selectedDir, w)
 					ui.currentState = scanDllsState
 				}
@@ -114,7 +116,7 @@ func (ui *UI) Run(w *app.Window) error {
 			case processMonitorState:
 				if ui.processMonitor.Run(gtx, e, ui.findProcessFunc) {
 					ui.processInfo = ui.processMonitor.GetProcessInfo()
-					ui.resultReport = result.NewReport(ui.Logger, ui.gw2Directory, ui.dllInfos, ui.processInfo, ui.includeDirListing)
+					ui.resultReport = result.NewReport(ui.Logger, ui.gw2Directory, ui.dllInfos, ui.processInfo, ui.includeDirListing, ui.includeLogs)
 					ui.currentState = resultState
 				}
 

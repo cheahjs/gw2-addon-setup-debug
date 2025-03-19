@@ -26,6 +26,7 @@ type Report struct {
 	exitButton        widget.Clickable
 	gw2Dir            string
 	includeDirListing bool
+	includeLogs       bool
 	dllInfos          []*utils.DllInfo
 	processInfo       *utils.ProcessInfo
 	reportSaved       bool
@@ -34,13 +35,14 @@ type Report struct {
 	list              *layout.List
 }
 
-func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo, includeDirListing bool) *Report {
+func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo, includeDirListing bool, includeLogs bool) *Report {
 	return &Report{
 		logger:            logger,
 		saveButton:        widget.Clickable{},
 		exitButton:        widget.Clickable{},
 		gw2Dir:            gw2Dir,
 		includeDirListing: includeDirListing,
+		includeLogs:       includeLogs,
 		dllInfos:          dllInfos,
 		processInfo:       processInfo,
 		list:              &layout.List{Axis: layout.Vertical},
@@ -430,6 +432,33 @@ func (r *Report) saveReport() {
 		// Use a max depth of 3 to prevent extremely large reports
 		listDirRecursive(r.gw2Dir, "", 3, 0)
 		report.WriteString("\n")
+	}
+
+	// Add this before the directory listing section in generateReport
+	if r.includeLogs {
+		// Check for arcdps logs
+		arcdpsLogPath := filepath.Join(r.gw2Dir, "addons/arcdps/arcdps.log")
+		arcdpsCrashLogPath := filepath.Join(r.gw2Dir, "addons/arcdps/arcdps_lastcrash.log")
+
+		report.WriteString("\n=== ArcDPS Logs ===\n\n")
+
+		// Try to read arcdps.log
+		if logContent, err := os.ReadFile(arcdpsLogPath); err == nil {
+			report.WriteString("=== arcdps.log ===\n")
+			report.WriteString(string(logContent))
+			report.WriteString("\n\n")
+		} else {
+			report.WriteString(fmt.Sprintf("Error reading arcdps.log: %s\n\n", err.Error()))
+		}
+
+		// Try to read arcdps_lastcrash.log
+		if logContent, err := os.ReadFile(arcdpsCrashLogPath); err == nil {
+			report.WriteString("=== arcdps_lastcrash.log ===\n")
+			report.WriteString(string(logContent))
+			report.WriteString("\n\n")
+		} else {
+			report.WriteString(fmt.Sprintf("Error reading arcdps_lastcrash.log: %s\n\n", err.Error()))
+		}
 	}
 
 	// Write to file
