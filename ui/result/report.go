@@ -233,7 +233,8 @@ func (r *Report) checkAddonLoaderInstallation() (bool, string) {
 	// 1. d3d11.dll, dxgi.dll, bin64/cef/dxgi.dll are present and are addon loader shims
 	// 2. addonLoader.dll is present and is an addon loader core
 	// 3. addons/lib_imgui/gw2addon_lib_imgui.dll is present and is an addon loader addon
-	var d3d11Shim, dxgiShim, cefDxgiShim, libImguiAddon, addonLoaderCore bool
+	// 4. addons/d3d9_wrapper/gw2addon_d3d9_wrapper.dll is present and is an addon loader addon
+	var d3d11Shim, dxgiShim, cefDxgiShim, libImguiAddon, addonLoaderCore, d3d9WrapperAddon bool
 	for _, dll := range r.dllInfos {
 		// Check if d3d11.dll is present and is an addon loader shim
 		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "d3d11.dll")) && dll.IsAddonLoaderShim {
@@ -251,13 +252,17 @@ func (r *Report) checkAddonLoaderInstallation() (bool, string) {
 		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "addons", "lib_imgui", "gw2addon_lib_imgui.dll")) && dll.IsAddonLoaderAddon {
 			libImguiAddon = true
 		}
+		// Check if addons/d3d9_wrapper/gw2addon_d3d9_wrapper.dll is present and is an addon loader addon
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "addons", "d3d9_wrapper", "gw2addon_d3d9_wrapper.dll")) && dll.IsAddonLoaderAddon {
+			d3d9WrapperAddon = true
+		}
 		// Check if addonLoader.dll is present and is an addon loader core
 		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "addonLoader.dll")) && dll.IsAddonLoaderCore {
 			addonLoaderCore = true
 		}
 	}
 
-	if d3d11Shim && dxgiShim && cefDxgiShim && libImguiAddon && addonLoaderCore {
+	if d3d11Shim && dxgiShim && cefDxgiShim && libImguiAddon && addonLoaderCore && d3d9WrapperAddon {
 		return true, ""
 	}
 	// none of addon loader shims are present, so it is not installed
@@ -277,6 +282,9 @@ func (r *Report) checkAddonLoaderInstallation() (bool, string) {
 	}
 	if !libImguiAddon {
 		builder.WriteString("  - addons/lib_imgui/gw2addon_lib_imgui.dll is missing\n")
+	}
+	if !d3d9WrapperAddon {
+		builder.WriteString("  - addons/d3d9_wrapper/gw2addon_d3d9_wrapper.dll is missing\n")
 	}
 	return false, builder.String()
 }
