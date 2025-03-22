@@ -44,6 +44,7 @@ func main() {
 		window := new(app.Window)
 		window.Option(app.Title("Guild Wars 2 Addon Setup Debugger"))
 		window.Option(app.Size(800, 600))
+		window.Option(app.MinSize(800, 600))
 
 		err := gui.Run(window)
 		if err != nil {
