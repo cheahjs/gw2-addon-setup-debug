@@ -221,6 +221,34 @@ func (r *Report) getWarningFlags() string {
 		flags.WriteString(addonLoaderMessage)
 	}
 
+	// Check if dxgi.dll is present, make sure dxgi.dll and bin64/cef/dxgi.dll are both present and are the same file
+	// Grab the presence and md5 of both files from r.dllInfos
+	dxgiPresent := false
+	cefDxgiPresent := false
+	dxgiMd5 := ""
+	cefDxgiMd5 := ""
+	for _, dll := range r.dllInfos {
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "dxgi.dll")) {
+			dxgiPresent = true
+			dxgiMd5 = dll.Md5sum
+		}
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "bin64", "cef", "dxgi.dll")) {
+			cefDxgiPresent = true
+			cefDxgiMd5 = dll.Md5sum
+		}
+	}
+	if dxgiPresent || cefDxgiPresent {
+		if dxgiPresent && !cefDxgiPresent {
+			flags.WriteString("dxgi.dll is present but bin64/cef/dxgi.dll is not present, they should be the same file\n")
+		}
+		if !dxgiPresent && cefDxgiPresent {
+			flags.WriteString("bin64/cef/dxgi.dll is present but dxgi.dll is not present, they should be the same file\n")
+		}
+		if dxgiPresent && cefDxgiPresent && dxgiMd5 != cefDxgiMd5 {
+			flags.WriteString("dxgi.dll and bin64/cef/dxgi.dll are present but they are different files\n")
+		}
+	}
+
 	// If Nexus is installed, it's a addon manager so we don't need to check
 	// If Arcdps is installed, it's a addon manager so we don't need to check
 
