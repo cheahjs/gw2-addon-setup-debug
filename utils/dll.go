@@ -100,10 +100,10 @@ func (info *DllInfo) Flags() string {
 		flags.WriteString("[ArcdpsAddon] ")
 	}
 	if info.IsGw2Load {
-		flags.WriteString("[Gw2Load] ")
+		flags.WriteString("[GW2Load] ")
 	}
 	if info.IsGw2LoadAddon {
-		flags.WriteString("[Gw2LoadAddon] ")
+		flags.WriteString("[GW2LoadAddon] ")
 	}
 	if info.IsReshade {
 		flags.WriteString("[Reshade] ")

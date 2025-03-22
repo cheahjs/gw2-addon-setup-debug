@@ -162,6 +162,8 @@ func getDllSource(loadType LoadType) string {
 		return "loaded by nexus"
 	case LoadTypeGw2LoadAddon:
 		return "loaded by gw2load"
+	case LoadTypeAddonLoaderCore:
+		return "loaded by addon loader core"
 	default:
 		return "unknown load type"
 	}

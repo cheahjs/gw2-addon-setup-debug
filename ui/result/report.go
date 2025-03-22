@@ -345,7 +345,7 @@ func (r *Report) printLoadChain(report *strings.Builder, loadOrder []utils.LoadO
 	var printTree func(entry *utils.LoadOrder, indent string)
 	printTree = func(entry *utils.LoadOrder, indent string) {
 		// Print this entry
-		report.WriteString(fmt.Sprintf("%s- %s", indent, filepath.Base(entry.DllInfo.FilePath)))
+		report.WriteString(fmt.Sprintf("%s- %s", indent, entry.DllInfo.FilePath))
 		if entry.Source != "" {
 			report.WriteString(fmt.Sprintf(" (%s)", entry.Source))
 		}
@@ -359,7 +359,7 @@ func (r *Report) printLoadChain(report *strings.Builder, loadOrder []utils.LoadO
 		}
 	}
 
-	report.WriteString("\n=== DLL Load Chain ===\n")
+	report.WriteString("\n=== Inferred DLL Load Chain ===\n")
 	for _, root := range roots {
 		printTree(root, "")
 	}
