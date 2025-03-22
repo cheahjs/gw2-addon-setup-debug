@@ -34,7 +34,7 @@ type Report struct {
 	reportSaved       bool
 	saveLocation      string
 	errorMessage      string
-	list              *layout.List
+	list              *widget.List
 }
 
 func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo, registryInfo *registry_check.RegistryInfo, includeDirListing bool, includeLogs bool) *Report {
@@ -48,7 +48,7 @@ func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllIn
 		dllInfos:          dllInfos,
 		processInfo:       processInfo,
 		registryInfo:      registryInfo,
-		list:              &layout.List{Axis: layout.Vertical},
+		list:              &widget.List{List: layout.List{Axis: layout.Vertical}},
 	}
 }
 
@@ -63,7 +63,7 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 		return true
 	}
 
-	r.list.Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
+	material.List(th, r.list).Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
 		return layout.Flex{
 			Axis: layout.Vertical,
 		}.Layout(gtx,
