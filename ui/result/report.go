@@ -280,6 +280,9 @@ func (r *Report) checkAddonLoaderInstallation() (bool, string) {
 	if !cefDxgiShim {
 		builder.WriteString("  - bin64/cef/dxgi.dll is missing or is not the addon loader\n")
 	}
+	if !addonLoaderCore {
+		builder.WriteString("  - addonLoader.dll is missing or is not the addon loader\n")
+	}
 	if !libImguiAddon {
 		builder.WriteString("  - addons/lib_imgui/gw2addon_lib_imgui.dll is missing\n")
 	}
