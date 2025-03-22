@@ -3,7 +3,8 @@ package admin
 import (
 	"fmt"
 	"os"
-	"os/exec"
+	"strings"
+	"syscall"
 
 	"gioui.org/app"
 	"gioui.org/layout"
@@ -12,6 +13,7 @@ import (
 	"gioui.org/widget/material"
 	"github.com/cheahjs/gw2-addon-setup-debug/utils"
 	"go.uber.org/zap"
+	"golang.org/x/sys/windows"
 )
 
 type AdminCheck struct {
@@ -62,15 +64,46 @@ func (ac *AdminCheck) Run(gtx layout.Context, e app.FrameEvent) (bool, bool) {
 			ac.elevationStarted = false
 			return false, false
 		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			ac.logger.Errorw("Failed to get current working directory", "error", err)
+			ac.errorMessage = fmt.Sprintf("Failed to get current working directory: %s", err.Error())
+			ac.elevationStarted = false
+			return false, false
+		}
+		args := strings.Join(os.Args[1:], " ")
 
-		// Prepare runas command
-		cmd := exec.Command("powershell", "Start-Process", "-Verb", "RunAs", exe)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+		verbPtr, err := syscall.UTF16PtrFromString("runas")
+		if err != nil {
+			ac.logger.Errorw("Failed to convert verb to UTF-16", "error", err)
+			ac.errorMessage = fmt.Sprintf("Failed to convert verb to UTF-16: %s", err.Error())
+			ac.elevationStarted = false
+			return false, false
+		}
+		exePtr, err := syscall.UTF16PtrFromString(exe)
+		if err != nil {
+			ac.logger.Errorw("Failed to convert executable path to UTF-16", "error", err)
+			ac.errorMessage = fmt.Sprintf("Failed to convert executable path to UTF-16: %s", err.Error())
+			ac.elevationStarted = false
+			return false, false
+		}
+		cwdPtr, err := syscall.UTF16PtrFromString(cwd)
+		if err != nil {
+			ac.logger.Errorw("Failed to convert current working directory to UTF-16", "error", err)
+			ac.errorMessage = fmt.Sprintf("Failed to convert current working directory to UTF-16: %s", err.Error())
+			ac.elevationStarted = false
+			return false, false
+		}
+		argPtr, err := syscall.UTF16PtrFromString(args)
+		if err != nil {
+			ac.logger.Errorw("Failed to convert arguments to UTF-16", "error", err)
+			ac.errorMessage = fmt.Sprintf("Failed to convert arguments to UTF-16: %s", err.Error())
+			ac.elevationStarted = false
+			return false, false
+		}
 
 		// Run the elevated process
-		err = cmd.Start()
+		err = windows.ShellExecute(0, verbPtr, exePtr, argPtr, cwdPtr, 0x1)
 		if err != nil {
 			ac.logger.Errorw("Failed to start elevated process", "error", err)
 			ac.errorMessage = fmt.Sprintf("Failed to start elevated process: %s", err.Error())
