@@ -7,6 +7,7 @@ import (
 	"gioui.org/op"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/admin"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/process_modules"
+	"github.com/cheahjs/gw2-addon-setup-debug/ui/registry_check"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/result"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/scan_directory"
 	"github.com/cheahjs/gw2-addon-setup-debug/ui/select_directory"
@@ -24,6 +25,7 @@ type UI struct {
 	directoryPicker *select_directory.Directory
 	dllScanner      *scan_directory.Scanner
 	processMonitor  *process_modules.Monitor
+	registryChecker *registry_check.RegistryChecker
 	resultReport    *result.Report
 
 	currentState uiState
@@ -34,6 +36,7 @@ type UI struct {
 	includeLogs       bool
 	dllInfos          []*utils.DllInfo
 	processInfo       *utils.ProcessInfo
+	registryInfo      *registry_check.RegistryInfo
 
 	// Function pointers for platform-specific operations
 	scanDllFunc     func(string) (*utils.DllInfo, error)
@@ -116,7 +119,14 @@ func (ui *UI) Run(w *app.Window) error {
 			case processMonitorState:
 				if ui.processMonitor.Run(gtx, e, ui.findProcessFunc) {
 					ui.processInfo = ui.processMonitor.GetProcessInfo()
-					ui.resultReport = result.NewReport(ui.Logger, ui.gw2Directory, ui.dllInfos, ui.processInfo, ui.includeDirListing, ui.includeLogs)
+					ui.registryChecker = registry_check.NewRegistryChecker(ui.Logger, w)
+					ui.currentState = registryCheckState
+				}
+
+			case registryCheckState:
+				if ui.registryChecker.Run(gtx, e) {
+					ui.registryInfo = ui.registryChecker.GetRegistryInfo()
+					ui.resultReport = result.NewReport(ui.Logger, ui.gw2Directory, ui.dllInfos, ui.processInfo, ui.registryInfo, ui.includeDirListing, ui.includeLogs)
 					ui.currentState = resultState
 				}
 

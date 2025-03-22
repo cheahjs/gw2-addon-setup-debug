@@ -13,6 +13,8 @@ const (
 	scanDllsState
 	// Monitor GW2 process
 	processMonitorState
+	// Check registry settings
+	registryCheckState
 	// Show results and generate report
 	resultState
 )

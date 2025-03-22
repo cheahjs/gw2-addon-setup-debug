@@ -16,6 +16,7 @@ import (
 	"gioui.org/text"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"github.com/cheahjs/gw2-addon-setup-debug/ui/registry_check"
 	"github.com/cheahjs/gw2-addon-setup-debug/utils"
 	"go.uber.org/zap"
 )
@@ -29,13 +30,14 @@ type Report struct {
 	includeLogs       bool
 	dllInfos          []*utils.DllInfo
 	processInfo       *utils.ProcessInfo
+	registryInfo      *registry_check.RegistryInfo
 	reportSaved       bool
 	saveLocation      string
 	errorMessage      string
 	list              *layout.List
 }
 
-func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo, includeDirListing bool, includeLogs bool) *Report {
+func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo, registryInfo *registry_check.RegistryInfo, includeDirListing bool, includeLogs bool) *Report {
 	return &Report{
 		logger:            logger,
 		saveButton:        widget.Clickable{},
@@ -45,6 +47,7 @@ func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllIn
 		includeLogs:       includeLogs,
 		dllInfos:          dllInfos,
 		processInfo:       processInfo,
+		registryInfo:      registryInfo,
 		list:              &layout.List{Axis: layout.Vertical},
 	}
 }
@@ -377,6 +380,39 @@ func (r *Report) saveReport() {
 
 	// Add GW2 directory info
 	report.WriteString(fmt.Sprintf("GW2 Directory: %s\n\n", r.gw2Dir))
+
+	// Add Registry info
+	report.WriteString("=== Windows Registry Settings ===\n")
+	if r.registryInfo != nil {
+		if r.registryInfo.SafeDllSearchMode != nil {
+			report.WriteString(fmt.Sprintf("SafeDllSearchMode: %d\n", *r.registryInfo.SafeDllSearchMode))
+		} else {
+			report.WriteString("SafeDllSearchMode: Not found\n")
+		}
+
+		if r.registryInfo.Gw2RegistryPath != nil {
+			report.WriteString(fmt.Sprintf("\nGW2 Registry Installation Path: %s\n", *r.registryInfo.Gw2RegistryPath))
+		} else {
+			report.WriteString("\nGW2 Registry Installation Path: Not found\n")
+		}
+
+		report.WriteString("\nKnownDLLs:\n")
+		if len(r.registryInfo.KnownDlls) > 0 {
+			var knownDlls []string
+			for name, value := range r.registryInfo.KnownDlls {
+				knownDlls = append(knownDlls, fmt.Sprintf("%s = %s", name, value))
+			}
+			sort.Strings(knownDlls)
+			for _, dll := range knownDlls {
+				report.WriteString(fmt.Sprintf("  %s\n", dll))
+			}
+		} else {
+			report.WriteString("  No KnownDLLs found\n")
+		}
+		report.WriteString("\n")
+	} else {
+		report.WriteString("Failed to retrieve registry information\n\n")
+	}
 
 	// Add DLL info
 	report.WriteString(fmt.Sprintf("=== DLLs in Directory (%d total) ===\n", len(r.dllInfos)))
