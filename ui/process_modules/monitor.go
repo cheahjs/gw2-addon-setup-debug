@@ -98,7 +98,7 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 			layout.Spacer{Height: 20}.Layout,
 		),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			instructions := "Please launch Guild Wars 2 and navigate to the character selection screen."
+			instructions := "Please launch Guild Wars 2 and navigate to the character selection screen. If the game crashes, then keep the crash report open and click the button below."
 			if m.gw2ProcessFound {
 				instructions = "Guild Wars 2 process detected! Please confirm when you've reached the character selection screen."
 			}
