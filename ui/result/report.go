@@ -292,6 +292,52 @@ func (r *Report) checkAddonLoaderInstallation() (bool, string) {
 	return false, builder.String()
 }
 
+func (r *Report) printLoadChain(report *strings.Builder, loadOrder []utils.LoadOrder) {
+	// Create a map of DLLs to their children
+	children := make(map[string][]*utils.LoadOrder)
+	var roots []*utils.LoadOrder
+	orderPtrs := make([]*utils.LoadOrder, len(loadOrder))
+
+	// Create stable pointers to all entries
+	for i := range loadOrder {
+		orderPtrs[i] = &loadOrder[i]
+	}
+
+	// First pass: build the tree structure using filepath as key
+	for _, entry := range orderPtrs {
+		if entry.Parent == nil {
+			roots = append(roots, entry)
+		} else {
+			parentPath := entry.Parent.DllInfo.FilePath
+			children[parentPath] = append(children[parentPath], entry)
+		}
+	}
+
+	// Helper function to print the tree
+	var printTree func(entry *utils.LoadOrder, indent string)
+	printTree = func(entry *utils.LoadOrder, indent string) {
+		// Print this entry
+		report.WriteString(fmt.Sprintf("%s- %s", indent, filepath.Base(entry.DllInfo.FilePath)))
+		if entry.Source != "" {
+			report.WriteString(fmt.Sprintf(" (%s)", entry.Source))
+		}
+		report.WriteString("\n")
+
+		// Print all children
+		if kids, ok := children[entry.DllInfo.FilePath]; ok {
+			for _, child := range kids {
+				printTree(child, indent+"  ")
+			}
+		}
+	}
+
+	report.WriteString("\n=== DLL Load Chain ===\n")
+	for _, root := range roots {
+		printTree(root, "")
+	}
+	report.WriteString("\n")
+}
+
 func (r *Report) saveReport() {
 	// Create filename with timestamp
 	timestamp := time.Now().Format("20060102-150405")
@@ -384,6 +430,10 @@ func (r *Report) saveReport() {
 		}
 		report.WriteString("\n")
 	}
+
+	// Add load chain info
+	loadOrder := utils.ResolveDllLoadResolution(r.dllInfos, r.gw2Dir)
+	r.printLoadChain(&report, loadOrder)
 
 	// Add process info
 	if r.processInfo != nil {
