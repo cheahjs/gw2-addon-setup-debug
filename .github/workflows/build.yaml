@@ -40,6 +40,7 @@ jobs:
             -name="Guild Wars 2 Addon Setup Debugger" \
             -icon=appicon.png \
             -o="Guild Wars 2 Addon Setup Debugger.exe" \
+            -ldflags="-s -w" \
             .
 
       - name: Rename file
