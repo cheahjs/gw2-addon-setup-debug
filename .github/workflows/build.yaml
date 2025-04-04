@@ -101,20 +101,9 @@ jobs:
           name: gw2-addon-setup-debug-signed
           path: gw2-addon-setup-debug.exe
 
-      - name: Get build version
-        id: version
-        shell: bash
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Rename file
-        shell: bash
-        run: mv "gw2-addon-setup-debug.exe" gw2-addon-setup-debug-${{ steps.version.outputs.version }}.exe
-
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: gw2-addon-setup-debug-${{ steps.version.outputs.version }}.exe
+          files: gw2-addon-setup-debug.exe
