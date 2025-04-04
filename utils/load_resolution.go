@@ -122,7 +122,7 @@ func processLoadChain(info *DllInfo, dllMap map[string]*DllInfo, gw2Path string,
 
 		addonsPath := filepath.Join(nexusRoot, "addons")
 		for dllPath, dllInfo := range dllMap {
-			if dllInfo.IsNexusAddon && strings.HasPrefix(strings.ToLower(dllPath), strings.ToLower(addonsPath)) {
+			if dllInfo.IsNexusAddon && strings.EqualFold(filepath.Dir(dllPath), addonsPath) {
 				processLoadChain(dllInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeNexusAddon, currentLoadOrder)
 			}
 		}
