@@ -25,15 +25,25 @@ type Scanner struct {
 	scanningStarted bool
 	scanningDone    bool
 	window          *app.Window
+	shortPathStatus string
 }
 
 func NewScanner(logger *zap.SugaredLogger, directory string, window *app.Window) *Scanner {
-	return &Scanner{
+	s := &Scanner{
 		logger:         logger,
 		directory:      directory,
 		continueButton: widget.Clickable{},
 		window:         window,
 	}
+
+	status, err := utils.Get8dot3NameStatus(directory)
+	if err != nil {
+		logger.Errorw("Failed to get 8.3 name status", "error", err)
+		s.shortPathStatus = fmt.Sprintf("Error determining 8.3 name status: %v", err)
+	} else {
+		s.shortPathStatus = status
+	}
+	return s
 }
 
 func (s *Scanner) Run(gtx layout.Context, e app.FrameEvent, scanDll func(string) (*utils.DllInfo, error)) bool {
@@ -64,6 +74,18 @@ func (s *Scanner) Run(gtx layout.Context, e app.FrameEvent, scanDll func(string)
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			paragraph := material.Body1(th, s.status)
 			return paragraph.Layout(gtx)
+		}),
+		layout.Rigid(
+			layout.Spacer{Height: 10}.Layout, // Reduced spacer for tighter layout
+		),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			statusText := "8.3 Filename Status: " + s.shortPathStatus
+			if strings.HasPrefix(s.shortPathStatus, "Error") {
+				statusText = s.shortPathStatus
+			}
+			label := material.Body1(th, statusText)
+			// label.Alignment = text.Start // Optional: if specific alignment is needed
+			return label.Layout(gtx)
 		}),
 		layout.Rigid(
 			layout.Spacer{Height: 20}.Layout,
@@ -103,7 +125,7 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 		if info.IsDir() {
 			return nil
 		}
-		if strings.ToLower(filepath.Ext(path)) == ".dll" {
+		if strings.HasPrefix(strings.ToLower(filepath.Ext(path)), ".dll") {
 			dllPaths[path] = struct{}{}
 		}
 		return nil
