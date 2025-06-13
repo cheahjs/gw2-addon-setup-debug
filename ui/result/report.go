@@ -489,6 +489,14 @@ func (r *Report) saveReport() {
 		report.WriteString(fmt.Sprintf("Command Line: %s\n", r.processInfo.CommandLine))
 		report.WriteString(fmt.Sprintf("Captured At: %s\n\n", r.processInfo.Timestamp.Format(time.RFC1123)))
 
+		// Check if the path the user provided is different from the path to the GW2 executable
+		executablePath := filepath.Dir(r.processInfo.ExecutablePath)
+		if r.gw2Dir != executablePath {
+			report.WriteString("GW2 Directory Mismatch - GW2 is running from a different directory than selected\n")
+			report.WriteString(fmt.Sprintf("- User provided: %s\n", r.gw2Dir))
+			report.WriteString(fmt.Sprintf("- Executable path: %s\n\n", executablePath))
+		}
+
 		report.WriteString(fmt.Sprintf("=== Loaded Modules (%d total) ===\n", len(r.processInfo.LoadedModules)))
 		// Sort modules by module name (case insensitive)
 		sort.Slice(r.processInfo.LoadedModules, func(i, j int) bool {
