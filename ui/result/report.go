@@ -263,7 +263,7 @@ func (r *Report) checkAddonLoaderInstallation() (bool, string) {
 	// It is installed correctly if:
 	// 1. d3d11.dll, dxgi.dll, bin64/cef/dxgi.dll are present and are addon loader shims
 	// 2. addonLoader.dll is present and is an addon loader core
-	var d3d11Shim, dxgiShim, cefDxgiShim, libImguiAddon, addonLoaderCore, d3d9WrapperAddon bool
+	var d3d11Shim, dxgiShim, cefDxgiShim, addonLoaderCore bool
 	for _, dll := range r.dllInfos {
 		// Check if d3d11.dll is present and is an addon loader shim
 		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "d3d11.dll")) && dll.IsAddonLoaderShim {
@@ -283,7 +283,7 @@ func (r *Report) checkAddonLoaderInstallation() (bool, string) {
 		}
 	}
 
-	if d3d11Shim && dxgiShim && cefDxgiShim && libImguiAddon && addonLoaderCore && d3d9WrapperAddon {
+	if d3d11Shim && dxgiShim && cefDxgiShim && addonLoaderCore {
 		return true, ""
 	}
 	// none of addon loader shims are present, so it is not installed
@@ -300,15 +300,6 @@ func (r *Report) checkAddonLoaderInstallation() (bool, string) {
 	}
 	if !cefDxgiShim {
 		builder.WriteString("  - bin64/cef/dxgi.dll is missing or is not the addon loader\n")
-	}
-	if !addonLoaderCore {
-		builder.WriteString("  - addonLoader.dll is missing or is not the addon loader\n")
-	}
-	if !libImguiAddon {
-		builder.WriteString("  - addons/lib_imgui/gw2addon_lib_imgui.dll is missing\n")
-	}
-	if !d3d9WrapperAddon {
-		builder.WriteString("  - addons/d3d9_wrapper/gw2addon_d3d9_wrapper.dll is missing\n")
 	}
 	return false, builder.String()
 }
