@@ -24,9 +24,10 @@ type Scanner struct {
 	status          string
 	scanningStarted bool
 	scanningDone    bool
-	window          *app.Window
+	window          *app.Window // Optional: only used in UI mode
 }
 
+// NewScanner creates a new Scanner instance for UI mode.
 func NewScanner(logger *zap.SugaredLogger, directory string, window *app.Window) *Scanner {
 	return &Scanner{
 		logger:         logger,
@@ -36,13 +37,31 @@ func NewScanner(logger *zap.SugaredLogger, directory string, window *app.Window)
 	}
 }
 
-func (s *Scanner) Run(gtx layout.Context, e app.FrameEvent, scanDll func(string) (*utils.DllInfo, error)) bool {
+// NewScannerNonInteractive creates a new Scanner instance for non-interactive mode.
+func NewScannerNonInteractive(logger *zap.SugaredLogger, directory string) *Scanner {
+	return &Scanner{
+		logger:    logger,
+		directory: directory,
+	}
+}
+
+func (s *Scanner) Run(gtx layout.Context, e app.FrameEvent, scanDllFunc func(string) (*utils.DllInfo, error)) bool {
 	th := material.NewTheme()
 
 	// Start scanning if it hasn't started yet
 	if !s.scanningStarted {
 		s.scanningStarted = true
-		go s.scanDlls(scanDll)
+		go func() {
+			_, err := s.ScanDпииNonInteractive(scanDllFunc) // Use a more descriptive name
+			if err != nil {
+				s.logger.Errorw("Error scanning DLLs", "error", err)
+				s.status = "Error scanning DLLs: " + err.Error()
+			}
+			s.scanningDone = true
+			if s.window != nil {
+				s.window.Invalidate()
+			}
+		}()
 	}
 
 	// Continue button clicked and scanning is done
@@ -89,9 +108,13 @@ func (s *Scanner) Run(gtx layout.Context, e app.FrameEvent, scanDll func(string)
 	return false
 }
 
-func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
+// ScanDпииNonInteractive performs DLL scanning without UI interaction.
+// It updates the status for UI mode if a window is available.
+func (s *Scanner) ScanDпииNonInteractive(scanDllFunc func(string) (*utils.DllInfo, error)) ([]*utils.DllInfo, error) {
 	s.status = "Looking for DLL files..."
-	s.window.Invalidate()
+	if s.window != nil {
+		s.window.Invalidate()
+	}
 	dllPaths := make(map[string]struct{})
 
 	// Find all DLLs in the directory
@@ -113,13 +136,17 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 		s.logger.Errorw("Failed to walk directory", "error", err)
 		s.status = "Error scanning directory: " + err.Error()
 		s.scanningDone = true
-		s.window.Invalidate()
-		return
+		if s.window != nil {
+			s.window.Invalidate()
+		}
+		return nil, err
 	}
 
 	// Scan each DLL
 	s.status = fmt.Sprintf("Found %d DLLs, analyzing...", len(dllPaths))
-	s.window.Invalidate()
+	if s.window != nil {
+		s.window.Invalidate()
+	}
 
 	// Map the DLL paths to a slice
 	dllPathsSlice := make([]string, 0, len(dllPaths))
@@ -129,13 +156,15 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 
 	for i, dllPath := range dllPathsSlice {
 		s.status = fmt.Sprintf("Analyzing DLL %d/%d: %s", i+1, len(dllPathsSlice), filepath.Base(dllPath))
-		s.window.Invalidate()
+		if s.window != nil {
+			s.window.Invalidate()
+		}
 
-		info, err := scanDll(dllPath)
+		info, err := scanDllFunc(dllPath)
 		if err != nil {
 			s.logger.Errorw("Failed to scan DLL", "path", dllPath, "error", err)
 			s.dllInfos = append(s.dllInfos, &utils.DllInfo{
-				Error: err.Error(),
+				Error:    err.Error(),
 				FilePath: dllPath,
 			})
 			continue
@@ -151,7 +180,10 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 
 	s.status = fmt.Sprintf("Completed! Analyzed %d DLLs", len(s.dllInfos))
 	s.scanningDone = true
-	s.window.Invalidate()
+	if s.window != nil {
+		s.window.Invalidate()
+	}
+	return s.dllInfos, nil
 }
 
 func (s *Scanner) GetDllInfos() []*utils.DllInfo {

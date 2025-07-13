@@ -28,12 +28,13 @@ type Monitor struct {
 	processInfo         *utils.ProcessInfo
 	startMonitoringTime time.Time
 	gw2ProcessFound     bool
-	window              *app.Window
+	window              *app.Window // Optional: only used in UI mode
 	findProcessFunc     func() (*utils.ProcessInfo, error)
 	tempProcessInfo     *utils.ProcessInfo
-	ticker              *time.Ticker
+	ticker              *time.Ticker // Optional: only used in UI mode
 }
 
+// NewMonitor creates a new Monitor instance for UI mode.
 func NewMonitor(logger *zap.SugaredLogger, window *app.Window) *Monitor {
 	// Check every second for GW2 process
 	return &Monitor{
@@ -43,6 +44,13 @@ func NewMonitor(logger *zap.SugaredLogger, window *app.Window) *Monitor {
 		skipButton:     widget.Clickable{},
 		window:         window,
 		ticker:         time.NewTicker(1 * time.Second),
+	}
+}
+
+// NewMonitorNonInteractive creates a new Monitor instance for non-interactive mode.
+func NewMonitorNonInteractive(logger *zap.SugaredLogger) *Monitor {
+	return &Monitor{
+		logger: logger,
 	}
 }
 
@@ -58,7 +66,9 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 	if !m.monitoringStarted {
 		m.monitoringStarted = true
 		m.startMonitoringTime = time.Now()
-		go m.monitorProcess(m.ticker)
+		if m.ticker != nil { // Only start ticker in UI mode
+			go m.monitorProcess(m.ticker)
+		}
 	}
 
 	// User clicked confirm - get latest process info
@@ -82,7 +92,9 @@ func (m *Monitor) Run(gtx layout.Context, e app.FrameEvent, findProcessFunc func
 
 	// User confirmed/skipped and continue button clicked
 	if (m.userConfirmed || m.userSkipped) && m.continueButton.Clicked(gtx) {
-		m.ticker.Stop()
+		if m.ticker != nil { // Only stop ticker in UI mode
+			m.ticker.Stop()
+		}
 		return true
 	}
 
@@ -224,9 +236,34 @@ func (m *Monitor) monitorProcess(ticker *time.Ticker) {
 					"workingDir", processInfo.WorkingDir,
 					"modules", len(processInfo.LoadedModules))
 			}
-			m.window.Invalidate()
+			if m.window != nil {
+				m.window.Invalidate()
+			}
 		}
 	}
+}
+
+// FindProcessNonInteractive attempts to find the GW2 process without UI interaction.
+// It returns the ProcessInfo if found, or an error otherwise.
+func (m *Monitor) FindProcessNonInteractive(findProcessFunc func() (*utils.ProcessInfo, error)) (*utils.ProcessInfo, error) {
+	m.findProcessFunc = findProcessFunc
+	processInfo, err := m.findProcessFunc()
+	if err != nil {
+		m.logger.Errorw("Failed to find GW2 process in non-interactive mode", "error", err)
+		return nil, err
+	}
+	if processInfo == nil {
+		m.logger.Info("GW2 process not found in non-interactive mode")
+		return nil, fmt.Errorf("GW2 process not found")
+	}
+	m.logger.Infow("Found GW2 process in non-interactive mode",
+		"pid", processInfo.ProcessID,
+		"path", processInfo.ExecutablePath,
+		"workingDir", processInfo.WorkingDir,
+		"modules", len(processInfo.LoadedModules))
+	m.processInfo = processInfo
+	m.userConfirmed = true // Mark as confirmed for GetProcessInfo
+	return processInfo, nil
 }
 
 func (m *Monitor) GetProcessInfo() *utils.ProcessInfo {

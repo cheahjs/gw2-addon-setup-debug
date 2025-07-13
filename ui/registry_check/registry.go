@@ -25,9 +25,10 @@ type RegistryChecker struct {
 	status         string
 	checkStarted   bool
 	checkDone      bool
-	window         *app.Window
+	window         *app.Window // Optional: only used in UI mode
 }
 
+// NewRegistryChecker creates a new RegistryChecker instance for UI mode.
 func NewRegistryChecker(logger *zap.SugaredLogger, window *app.Window) *RegistryChecker {
 	return &RegistryChecker{
 		logger:         logger,
@@ -36,12 +37,24 @@ func NewRegistryChecker(logger *zap.SugaredLogger, window *app.Window) *Registry
 	}
 }
 
+// NewRegistryCheckerNonInteractive creates a new RegistryChecker instance for non-interactive mode.
+func NewRegistryCheckerNonInteractive(logger *zap.SugaredLogger) *RegistryChecker {
+	return &RegistryChecker{
+		logger: logger,
+	}
+}
+
 func (r *RegistryChecker) Run(gtx layout.Context, e app.FrameEvent) bool {
 	th := material.NewTheme()
 
 	if !r.checkStarted {
 		r.checkStarted = true
-		go r.checkRegistry()
+		go func() {
+			r.CheckRegistryNonInteractive()
+			if r.window != nil {
+				r.window.Invalidate()
+			}
+		}()
 	}
 
 	if r.continueButton.Clicked(gtx) && r.checkDone {
@@ -107,9 +120,13 @@ func (r *RegistryChecker) Run(gtx layout.Context, e app.FrameEvent) bool {
 	return false
 }
 
-func (r *RegistryChecker) checkRegistry() {
+// CheckRegistryNonInteractive performs registry checks without UI interaction.
+// It updates the status for UI mode if a window is available.
+func (r *RegistryChecker) CheckRegistryNonInteractive() *RegistryInfo {
 	r.status = "Checking registry keys..."
-	r.window.Invalidate()
+	if r.window != nil {
+		r.window.Invalidate()
+	}
 
 	info := &RegistryInfo{
 		KnownDlls: make(map[string]string),
@@ -164,7 +181,10 @@ func (r *RegistryChecker) checkRegistry() {
 	r.registryInfo = info
 	r.status = "Registry check complete"
 	r.checkDone = true
-	r.window.Invalidate()
+	if r.window != nil {
+		r.window.Invalidate()
+	}
+	return info
 }
 
 func (r *RegistryChecker) GetRegistryInfo() *RegistryInfo {

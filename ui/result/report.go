@@ -34,9 +34,10 @@ type Report struct {
 	reportSaved       bool
 	saveLocation      string
 	errorMessage      string
-	list              *widget.List
+	list              *widget.List // Optional: only used in UI mode
 }
 
+// NewReport creates a new Report instance for UI mode.
 func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo, registryInfo *registry_check.RegistryInfo, includeDirListing bool, includeLogs bool) *Report {
 	return &Report{
 		logger:            logger,
@@ -52,15 +53,43 @@ func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllIn
 	}
 }
 
+// NewReportNonInteractive creates a new Report instance for non-interactive mode.
+func NewReportNonInteractive(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo, registryInfo *registry_check.RegistryInfo, includeDirListing bool, includeLogs bool) *Report {
+	return &Report{
+		logger:            logger,
+		gw2Dir:            gw2Dir,
+		includeDirListing: includeDirListing,
+		includeLogs:       includeLogs,
+		dllInfos:          dllInfos,
+		processInfo:       processInfo,
+		registryInfo:      registryInfo,
+	}
+}
+
 func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 	th := material.NewTheme()
 
 	if r.saveButton.Clicked(gtx) {
-		go r.saveReport()
+		// In UI mode, saveReport is called in a goroutine.
+		// For non-interactive, it will be called directly.
+		go func() {
+			_, err := r.generateReportString()
+			if err != nil {
+				r.errorMessage = fmt.Sprintf("Error generating report: %s", err.Error())
+				r.logger.Errorw("Failed to generate report", "error", err)
+				return
+			}
+			r.saveReportToFile("") // Empty path means generate timestamped filename
+		}()
 	}
 
 	if r.exitButton.Clicked(gtx) {
 		return true
+	}
+
+	// The rest of this function is UI rendering, skip if list is nil (non-interactive)
+	if r.list == nil {
+		return false
 	}
 
 	material.List(th, r.list).Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
@@ -206,155 +235,8 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 	return false
 }
 
-func (r *Report) getWarningFlags() string {
-	var flags strings.Builder
-
-	// Check if the path the user provided is different from the path to the GW2 executable
-	if r.processInfo != nil {
-		executablePath := filepath.Dir(r.processInfo.ExecutablePath)
-		if r.gw2Dir != executablePath {
-			flags.WriteString("GW2 Directory Mismatch - GW2 is running from a different directory than the one you provided\n")
-			flags.WriteString(fmt.Sprintf("  User provided: %s\n", r.gw2Dir))
-			flags.WriteString(fmt.Sprintf("  Executable path: %s\n", executablePath))
-		}
-	}
-
-	addonLoaderInstalled, addonLoaderMessage := r.checkAddonLoaderInstallation()
-	if !addonLoaderInstalled {
-		flags.WriteString(addonLoaderMessage)
-	}
-
-	// Check if dxgi.dll is present, make sure dxgi.dll and bin64/cef/dxgi.dll are both present and are the same file
-	// Grab the presence and md5 of both files from r.dllInfos
-	dxgiPresent := false
-	cefDxgiPresent := false
-	dxgiMd5 := ""
-	cefDxgiMd5 := ""
-	for _, dll := range r.dllInfos {
-		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "dxgi.dll")) {
-			dxgiPresent = true
-			dxgiMd5 = dll.Md5sum
-		}
-		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "bin64", "cef", "dxgi.dll")) {
-			cefDxgiPresent = true
-			cefDxgiMd5 = dll.Md5sum
-		}
-	}
-	if dxgiPresent || cefDxgiPresent {
-		if dxgiPresent && !cefDxgiPresent {
-			flags.WriteString("dxgi.dll is present but bin64/cef/dxgi.dll is not present, they should be the same file\n")
-		}
-		if !dxgiPresent && cefDxgiPresent {
-			flags.WriteString("bin64/cef/dxgi.dll is present but dxgi.dll is not present, they should be the same file\n")
-		}
-		if dxgiPresent && cefDxgiPresent && dxgiMd5 != cefDxgiMd5 {
-			flags.WriteString("dxgi.dll and bin64/cef/dxgi.dll are present but they are different files\n")
-		}
-	}
-
-	// If Nexus is installed, it's a addon manager so we don't need to check
-	// If Arcdps is installed, it's a addon manager so we don't need to check
-
-	return flags.String()
-}
-
-func (r *Report) checkAddonLoaderInstallation() (bool, string) {
-	// Check if addon loader is installed correctly
-	// It is installed correctly if:
-	// 1. d3d11.dll, dxgi.dll, bin64/cef/dxgi.dll are present and are addon loader shims
-	// 2. addonLoader.dll is present and is an addon loader core
-	var d3d11Shim, dxgiShim, cefDxgiShim, addonLoaderCore bool
-	for _, dll := range r.dllInfos {
-		// Check if d3d11.dll is present and is an addon loader shim
-		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "d3d11.dll")) && dll.IsAddonLoaderShim {
-			d3d11Shim = true
-		}
-		// Check if dxgi.dll is present and is an addon loader shim
-		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "dxgi.dll")) && dll.IsAddonLoaderShim {
-			dxgiShim = true
-		}
-		// Check if bin64/cef/dxgi.dll is present and is an addon loader shim
-		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "bin64", "cef", "dxgi.dll")) && dll.IsAddonLoaderShim {
-			cefDxgiShim = true
-		}
-		// Check if addonLoader.dll is present and is an addon loader core
-		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "addonLoader.dll")) && dll.IsAddonLoaderCore {
-			addonLoaderCore = true
-		}
-	}
-
-	if d3d11Shim && dxgiShim && cefDxgiShim && addonLoaderCore {
-		return true, ""
-	}
-	// none of addon loader shims are present, so it is not installed
-	if !d3d11Shim && !dxgiShim && !cefDxgiShim {
-		return true, ""
-	}
-	var builder strings.Builder
-	builder.WriteString("Addon Loader is not installed correctly - please reinstall with GW2 Addon Manager\n")
-	if !d3d11Shim {
-		builder.WriteString("  - d3d11.dll is missing or is not the addon loader\n")
-	}
-	if !dxgiShim {
-		builder.WriteString("  - dxgi.dll is missing or is not the addon loader\n")
-	}
-	if !cefDxgiShim {
-		builder.WriteString("  - bin64/cef/dxgi.dll is missing or is not the addon loader\n")
-	}
-	return false, builder.String()
-}
-
-func (r *Report) printLoadChain(report *strings.Builder, loadOrder []utils.LoadOrder) {
-	// Create a map of DLLs to their children
-	children := make(map[string][]*utils.LoadOrder)
-	var roots []*utils.LoadOrder
-	orderPtrs := make([]*utils.LoadOrder, len(loadOrder))
-
-	// Create stable pointers to all entries
-	for i := range loadOrder {
-		orderPtrs[i] = &loadOrder[i]
-	}
-
-	// First pass: build the tree structure using filepath as key
-	for _, entry := range orderPtrs {
-		if entry.Parent == nil {
-			roots = append(roots, entry)
-		} else {
-			parentPath := entry.Parent.DllInfo.FilePath
-			children[parentPath] = append(children[parentPath], entry)
-		}
-	}
-
-	// Helper function to print the tree
-	var printTree func(entry *utils.LoadOrder, indent string)
-	printTree = func(entry *utils.LoadOrder, indent string) {
-		// Print this entry
-		report.WriteString(fmt.Sprintf("%s- %s", indent, entry.DllInfo.FilePath))
-		if entry.Source != "" {
-			report.WriteString(fmt.Sprintf(" (%s)", entry.Source))
-		}
-		report.WriteString("\n")
-
-		// Print all children
-		if kids, ok := children[entry.DllInfo.FilePath]; ok {
-			for _, child := range kids {
-				printTree(child, indent+"  ")
-			}
-		}
-	}
-
-	report.WriteString("\n=== Inferred DLL Load Chain ===\n")
-	for _, root := range roots {
-		printTree(root, "")
-	}
-	report.WriteString("\n")
-}
-
-func (r *Report) saveReport() {
-	// Create filename with timestamp
-	timestamp := time.Now().Format("20060102-150405")
-	filename := fmt.Sprintf("gw2-addon-debug-%s.log", timestamp)
-
+// generateReportString generates the full report content as a string.
+func (r *Report) generateReportString() (string, error) {
 	var report strings.Builder
 	report.WriteString("=== Guild Wars 2 Addon Debug Report ===\n")
 	report.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().Format(time.RFC1123)))
@@ -583,28 +465,195 @@ func (r *Report) saveReport() {
 			report.WriteString(fmt.Sprintf("Error reading arcdps_lastcrash.log: %s\n\n", err.Error()))
 		}
 	}
+	return report.String(), nil
+}
+
+func (r *Report) getWarningFlags() string {
+	var flags strings.Builder
+
+	// Check if the path the user provided is different from the path to the GW2 executable
+	if r.processInfo != nil {
+		executablePath := filepath.Dir(r.processInfo.ExecutablePath)
+		if r.gw2Dir != executablePath {
+			flags.WriteString("GW2 Directory Mismatch - GW2 is running from a different directory than the one you provided\n")
+			flags.WriteString(fmt.Sprintf("  User provided: %s\n", r.gw2Dir))
+			flags.WriteString(fmt.Sprintf("  Executable path: %s\n", executablePath))
+		}
+	}
+
+	addonLoaderInstalled, addonLoaderMessage := r.checkAddonLoaderInstallation()
+	if !addonLoaderInstalled {
+		flags.WriteString(addonLoaderMessage)
+	}
+
+	// Check if dxgi.dll is present, make sure dxgi.dll and bin64/cef/dxgi.dll are both present and are the same file
+	// Grab the presence and md5 of both files from r.dllInfos
+	dxgiPresent := false
+	cefDxgiPresent := false
+	dxgiMd5 := ""
+	cefDxgiMd5 := ""
+	for _, dll := range r.dllInfos {
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "dxgi.dll")) {
+			dxgiPresent = true
+			dxgiMd5 = dll.Md5sum
+		}
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "bin64", "cef", "dxgi.dll")) {
+			cefDxgiPresent = true
+			cefDxgiMd5 = dll.Md5sum
+		}
+	}
+	if dxgiPresent || cefDxgiPresent {
+		if dxgiPresent && !cefDxgiPresent {
+			flags.WriteString("dxgi.dll is present but bin64/cef/dxgi.dll is not present, they should be the same file\n")
+		}
+		if !dxgiPresent && cefDxgiPresent {
+			flags.WriteString("bin64/cef/dxgi.dll is present but dxgi.dll is not present, they should be the same file\n")
+		}
+		if dxgiPresent && cefDxgiPresent && dxgiMd5 != cefDxgiMd5 {
+			flags.WriteString("dxgi.dll and bin64/cef/dxgi.dll are present but they are different files\n")
+		}
+	}
+
+	// If Nexus is installed, it's a addon manager so we don't need to check
+	// If Arcdps is installed, it's a addon manager so we don't need to check
+
+	return flags.String()
+}
+
+func (r *Report) checkAddonLoaderInstallation() (bool, string) {
+	// Check if addon loader is installed correctly
+	// It is installed correctly if:
+	// 1. d3d11.dll, dxgi.dll, bin64/cef/dxgi.dll are present and are addon loader shims
+	// 2. addonLoader.dll is present and is an addon loader core
+	var d3d11Shim, dxgiShim, cefDxgiShim, addonLoaderCore bool
+	for _, dll := range r.dllInfos {
+		// Check if d3d11.dll is present and is an addon loader shim
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "d3d11.dll")) && dll.IsAddonLoaderShim {
+			d3d11Shim = true
+		}
+		// Check if dxgi.dll is present and is an addon loader shim
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "dxgi.dll")) && dll.IsAddonLoaderShim {
+			dxgiShim = true
+		}
+		// Check if bin64/cef/dxgi.dll is present and is an addon loader shim
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "bin64", "cef", "dxgi.dll")) && dll.IsAddonLoaderShim {
+			cefDxgiShim = true
+		}
+		// Check if addonLoader.dll is present and is an addon loader core
+		if strings.EqualFold(dll.FilePath, filepath.Join(r.gw2Dir, "addonLoader.dll")) && dll.IsAddonLoaderCore {
+			addonLoaderCore = true
+		}
+	}
+
+	if d3d11Shim && dxgiShim && cefDxgiShim && addonLoaderCore {
+		return true, ""
+	}
+	// none of addon loader shims are present, so it is not installed
+	if !d3d11Shim && !dxgiShim && !cefDxgiShim {
+		return true, ""
+	}
+	var builder strings.Builder
+	builder.WriteString("Addon Loader is not installed correctly - please reinstall with GW2 Addon Manager\n")
+	if !d3d11Shim {
+		builder.WriteString("  - d3d11.dll is missing or is not the addon loader\n")
+	}
+	if !dxgiShim {
+		builder.WriteString("  - dxgi.dll is missing or is not the addon loader\n")
+	}
+	if !cefDxgiShim {
+		builder.WriteString("  - bin64/cef/dxgi.dll is missing or is not the addon loader\n")
+	}
+	return false, builder.String()
+}
+
+func (r *Report) printLoadChain(report *strings.Builder, loadOrder []utils.LoadOrder) {
+	// Create a map of DLLs to their children
+	children := make(map[string][]*utils.LoadOrder)
+	var roots []*utils.LoadOrder
+	orderPtrs := make([]*utils.LoadOrder, len(loadOrder))
+
+	// Create stable pointers to all entries
+	for i := range loadOrder {
+		orderPtrs[i] = &loadOrder[i]
+	}
+
+	// First pass: build the tree structure using filepath as key
+	for _, entry := range orderPtrs {
+		if entry.Parent == nil {
+			roots = append(roots, entry)
+		} else {
+			parentPath := entry.Parent.DllInfo.FilePath
+			children[parentPath] = append(children[parentPath], entry)
+		}
+	}
+
+	// Helper function to print the tree
+	var printTree func(entry *utils.LoadOrder, indent string)
+	printTree = func(entry *utils.LoadOrder, indent string) {
+		// Print this entry
+		report.WriteString(fmt.Sprintf("%s- %s", indent, entry.DllInfo.FilePath))
+		if entry.Source != "" {
+			report.WriteString(fmt.Sprintf(" (%s)", entry.Source))
+		}
+		report.WriteString("\n")
+
+		// Print all children
+		if kids, ok := children[entry.DllInfo.FilePath]; ok {
+			for _, child := range kids {
+				printTree(child, indent+"  ")
+			}
+		}
+	}
+
+	report.WriteString("\n=== Inferred DLL Load Chain ===\n")
+	for _, root := range roots {
+		printTree(root, "")
+	}
+	report.WriteString("\n")
+}
+
+// saveReportToFile saves the generated report string to a file.
+// If outputPath is empty, a timestamped filename is generated.
+// Returns the absolute path of the saved file and any error.
+func (r *Report) saveReportToFile(outputPath string) (string, error) {
+	reportString, err := r.generateReportString()
+	if err != nil {
+		r.errorMessage = fmt.Sprintf("Error generating report: %s", err.Error())
+		r.logger.Errorw("Failed to generate report string", "error", err)
+		return "", err
+	}
+
+	filename := outputPath
+	if filename == "" {
+		// Create filename with timestamp
+		timestamp := time.Now().Format("20060102-150405")
+		filename = fmt.Sprintf("gw2-addon-debug-%s.log", timestamp)
+	}
 
 	// Write to file
-	err := os.WriteFile(filename, []byte(report.String()), 0644)
+	err = os.WriteFile(filename, []byte(reportString), 0644)
 	if err != nil {
 		r.errorMessage = fmt.Sprintf("Error saving report: %s", err.Error())
-		r.logger.Errorw("Failed to save report", "error", err)
-		return
+		r.logger.Errorw("Failed to save report", "error", err, "filename", filename)
+		return "", err
 	}
 
 	// Get absolute path for display
 	absPath, err := filepath.Abs(filename)
 	if err != nil {
-		absPath = filename
+		absPath = filename // Use relative path if Abs fails
 	}
 
 	r.saveLocation = absPath
-	r.reportSaved = true
+	r.reportSaved = true // Important for UI mode
 	r.logger.Infow("Report saved", "path", absPath)
 
-	// Open and focus explorer window showing the report
-	err = exec.Command("explorer.exe", "/e,/select,", absPath).Run()
-	if err != nil {
-		r.logger.Errorw("Failed to open report folder", "error", err)
+	// Open and focus explorer window showing the report (only in UI mode)
+	if r.list != nil { // list is nil in non-interactive mode
+		err = exec.Command("explorer.exe", "/e,/select,", absPath).Run()
+		if err != nil {
+			r.logger.Errorw("Failed to open report folder", "error", err)
+		}
 	}
+	return absPath, nil
 }
