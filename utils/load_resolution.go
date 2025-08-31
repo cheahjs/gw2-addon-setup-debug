@@ -113,7 +113,7 @@ func processLoadChain(info *DllInfo, dllMap map[string]*DllInfo, gw2Path string,
 			if dllInfo.IsAddonLoaderAddon {
 				dllDir := filepath.Dir(dllPath)
 				// Check if the DLL is in exactly one subdirectory of the addons directory
-				if strings.HasPrefix(strings.ToLower(dllDir), strings.ToLower(addonsPath)+string(filepath.Separator)) && len(dllDir) > len(addonsPath) {
+				if strings.HasPrefix(strings.ToLower(dllDir), strings.ToLower(addonsPath)+string(filepath.Separator)) && len(dllDir) > len(addonsPath)+1 {
 					// Ensure it's exactly one level deep by checking there are no more path separators
 					relativePath := dllDir[len(addonsPath)+1:] // Remove addons path and separator
 					if !strings.Contains(relativePath, string(filepath.Separator)) {
