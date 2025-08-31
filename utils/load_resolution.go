@@ -86,10 +86,12 @@ func processLoadChain(info *DllInfo, dllMap map[string]*DllInfo, gw2Path string,
 		}
 
 		// Search for arcdps addons in various directories
+		// - dllDir: arc loads DLLs from the directory it was loaded from
+		// - gw2Path: arc loads DLLs from the root game directory
+		// - bin64 - arc loads DLLs from the bin64 directory
 		for _, searchDir := range []string{dllDir, gw2Path, filepath.Join(gw2Path, "bin64")} {
-			searchDirLower := strings.ToLower(searchDir)
 			for dllPath, dllInfo := range dllMap {
-				if dllInfo.IsArcdpsAddon && strings.HasPrefix(strings.ToLower(dllPath), searchDirLower) {
+				if dllInfo.IsArcdpsAddon && strings.EqualFold(filepath.Dir(dllPath), searchDir) {
 					processLoadChain(dllInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeArcdpsAddon, currentLoadOrder)
 				}
 			}
@@ -97,6 +99,7 @@ func processLoadChain(info *DllInfo, dllMap map[string]*DllInfo, gw2Path string,
 	}
 
 	if info.IsAddonLoaderShim {
+		// Addon loader shim loads the addon loader core
 		addonLoaderCorePath := filepath.Join(gw2Path, "addonLoader.dll")
 		if addonLoaderCoreInfo, exists := dllMap[strings.ToLower(addonLoaderCorePath)]; exists {
 			processLoadChain(addonLoaderCoreInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeAddonLoaderCore, currentLoadOrder)
@@ -104,10 +107,27 @@ func processLoadChain(info *DllInfo, dllMap map[string]*DllInfo, gw2Path string,
 	}
 
 	if info.IsAddonLoaderCore {
+		// Addon loader core loads addon loader addons from addons/<addon>/gw2addon_<addon>.dll
 		addonsPath := filepath.Join(gw2Path, "addons")
 		for dllPath, dllInfo := range dllMap {
-			if dllInfo.IsAddonLoaderAddon && strings.HasPrefix(strings.ToLower(dllPath), strings.ToLower(addonsPath)) {
-				processLoadChain(dllInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeAddonLoaderAddon, currentLoadOrder)
+			if dllInfo.IsAddonLoaderAddon {
+				dllDir := filepath.Dir(dllPath)
+				// Check if the DLL is in exactly one subdirectory of the addons directory
+				if strings.HasPrefix(strings.ToLower(dllDir), strings.ToLower(addonsPath)+string(filepath.Separator)) && len(dllDir) > len(addonsPath)+1 {
+					// Ensure it's exactly one level deep by checking there are no more path separators
+					relativePath := dllDir[len(addonsPath)+1:] // Remove addons path and separator
+					if !strings.Contains(relativePath, string(filepath.Separator)) {
+						// Validate the naming format: gw2addon_<addon_name>.dll
+						dllFileName := filepath.Base(dllPath)
+						addonDirName := filepath.Base(dllDir)
+						expectedFileName := "gw2addon_" + addonDirName + ".dll"
+
+						// Check if the filename matches the expected pattern (case-insensitive)
+						if strings.EqualFold(dllFileName, expectedFileName) {
+							processLoadChain(dllInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeAddonLoaderAddon, currentLoadOrder)
+						}
+					}
+				}
 			}
 		}
 	}
@@ -115,11 +135,13 @@ func processLoadChain(info *DllInfo, dllMap map[string]*DllInfo, gw2Path string,
 	if info.IsNexus {
 		nexusRoot := dllDir
 
+		// Nexus chainloads a d3d11 shim
 		chainloadPath := filepath.Join(nexusRoot, "d3d11_chainload.dll")
 		if chainloadInfo, exists := dllMap[strings.ToLower(chainloadPath)]; exists {
 			processLoadChain(chainloadInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeShim, currentLoadOrder)
 		}
 
+		// Nexus loads addons from addons/*.dll
 		addonsPath := filepath.Join(nexusRoot, "addons")
 		for dllPath, dllInfo := range dllMap {
 			if dllInfo.IsNexusAddon && strings.EqualFold(filepath.Dir(dllPath), addonsPath) {
@@ -127,6 +149,7 @@ func processLoadChain(info *DllInfo, dllMap map[string]*DllInfo, gw2Path string,
 			}
 		}
 
+		// Nexus explicitly loads the arcdps integration from addons/Nexus/arcdps_integration64.dll
 		arcdpsIntegrationPath := filepath.Join(nexusRoot, "addons", "Nexus", "arcdps_integration64.dll")
 		if integrationInfo, exists := dllMap[strings.ToLower(arcdpsIntegrationPath)]; exists {
 			processLoadChain(integrationInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeNexusAddon, currentLoadOrder)
@@ -134,15 +157,19 @@ func processLoadChain(info *DllInfo, dllMap map[string]*DllInfo, gw2Path string,
 	}
 
 	if info.IsGw2Load {
+		// GW2Load loads addons from addons/*.dll
 		addonsPath := filepath.Join(filepath.Dir(info.FilePath), "addons")
 		// Search through dllMap for GW2Load addons
 		for dllPath, dllInfo := range dllMap {
-			lowerDllPath := strings.ToLower(dllPath)
-			if dllInfo.IsGw2LoadAddon && strings.HasPrefix(lowerDllPath, strings.ToLower(addonsPath)) {
-				// Skip files in folders starting with . or _
-				dirName := filepath.Base(filepath.Dir(dllPath))
-				if !strings.HasPrefix(dirName, ".") && !strings.HasPrefix(dirName, "_") {
-					processLoadChain(dllInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeGw2LoadAddon, currentLoadOrder)
+			if dllInfo.IsGw2LoadAddon {
+				dllDir := filepath.Dir(dllPath)
+				// Check if the DLL is in the addons directory or a subdirectory of it
+				if strings.EqualFold(dllDir, addonsPath) || (strings.HasPrefix(strings.ToLower(dllDir), strings.ToLower(addonsPath)+string(filepath.Separator)) && len(dllDir) > len(addonsPath)) {
+					// Skip files in folders starting with . or _
+					dirName := filepath.Base(dllDir)
+					if !strings.HasPrefix(dirName, ".") && !strings.HasPrefix(dirName, "_") {
+						processLoadChain(dllInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeGw2LoadAddon, currentLoadOrder)
+					}
 				}
 			}
 		}
