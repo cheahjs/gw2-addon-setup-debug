@@ -94,6 +94,14 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 	s.window.Invalidate()
 	dllPaths := make(map[string]struct{})
 
+	shortPathsEnabled := true
+	if enabled, err := utils.ShortPathsEnabled(s.directory); err != nil {
+		s.logger.Warnw("Failed to determine short path support", "error", err)
+	} else {
+		shortPathsEnabled = enabled
+		s.logger.Infow("Short path support detected", "directory", s.directory, "enabled", enabled)
+	}
+
 	// Find all DLLs in the directory
 	err := filepath.Walk(s.directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -103,7 +111,9 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 		if info.IsDir() {
 			return nil
 		}
-		if strings.ToLower(filepath.Ext(path)) == ".dll" {
+		ext := strings.ToLower(filepath.Ext(path))
+		// Apply arcdps short-path matching only when 8.3 names are enabled, otherwise require an exact .dll extension.
+		if (shortPathsEnabled && strings.HasPrefix(ext, ".dll")) || (!shortPathsEnabled && ext == ".dll") {
 			dllPaths[path] = struct{}{}
 		}
 		return nil
@@ -135,7 +145,7 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 		if err != nil {
 			s.logger.Errorw("Failed to scan DLL", "path", dllPath, "error", err)
 			s.dllInfos = append(s.dllInfos, &utils.DllInfo{
-				Error: err.Error(),
+				Error:    err.Error(),
 				FilePath: dllPath,
 			})
 			continue
