@@ -2,14 +2,13 @@ package result
 
 import (
 	"fmt"
+	"image/color"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
-
-	"image/color"
 
 	"gioui.org/app"
 	"gioui.org/layout"
@@ -377,6 +376,17 @@ func (r *Report) saveReport() {
 			report.WriteString("\nGW2 Registry Installation Path: Not found\n")
 		}
 
+		if r.registryInfo.ShortPathStatus != nil {
+			status := r.registryInfo.ShortPathStatus
+			if status.Error != "" {
+				report.WriteString(fmt.Sprintf("\n8.3 Short Path (%s): Error - %s\n", status.VolumeRoot, status.Error))
+			} else if status.Enabled {
+				report.WriteString(fmt.Sprintf("\n8.3 Short Path (%s): Enabled\n", status.VolumeRoot))
+			} else {
+				report.WriteString(fmt.Sprintf("\n8.3 Short Path (%s): Disabled\n", status.VolumeRoot))
+			}
+		}
+
 		report.WriteString("\nKnownDLLs:\n")
 		if len(r.registryInfo.KnownDlls) > 0 {
 			var knownDlls []string
@@ -585,7 +595,7 @@ func (r *Report) saveReport() {
 	}
 
 	// Write to file
-	err := os.WriteFile(filename, []byte(report.String()), 0644)
+	err := os.WriteFile(filename, []byte(report.String()), 0o644)
 	if err != nil {
 		r.errorMessage = fmt.Sprintf("Error saving report: %s", err.Error())
 		r.logger.Errorw("Failed to save report", "error", err)

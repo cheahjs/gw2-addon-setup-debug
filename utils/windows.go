@@ -118,7 +118,7 @@ func getProcessPath(handle windows.Handle) (string, error) {
 
 func listProcessModules(handle windows.Handle) ([]ModuleInfo, error) {
 	var modules [1024]windows.Handle
-	var cb = uint32(unsafe.Sizeof(modules))
+	cb := uint32(unsafe.Sizeof(modules))
 	var needed uint32
 	if err := windows.EnumProcessModulesEx(handle, &modules[0], cb, &needed, windows.LIST_MODULES_ALL); err != nil {
 		return nil, fmt.Errorf("failed to enumerate process modules: %w", err)
@@ -146,6 +146,57 @@ func listProcessModules(handle windows.Handle) ([]ModuleInfo, error) {
 	}
 
 	return moduleInfos, nil
+}
+
+// ShortPathStatus represents the 8.3 short path name status for a volume
+type ShortPathStatus struct {
+	VolumeRoot string
+	Enabled    bool
+	Error      string
+}
+
+// GetShortPathStatus checks if 8.3 short path names are enabled for the volume containing the given path.
+func GetShortPathStatus(path string) ShortPathStatus {
+	// Get the volume root path (e.g., "C:\")
+	volumeRoot := filepath.VolumeName(path)
+	if volumeRoot == "" {
+		return ShortPathStatus{Error: "could not determine volume from path"}
+	}
+	volumeRoot += `\`
+
+	// First, let's try to get the short path name of the path itself
+	pathPtr, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return ShortPathStatus{VolumeRoot: volumeRoot, Error: fmt.Sprintf("failed to convert path: %v", err)}
+	}
+
+	// Get required buffer size
+	n, err := windows.GetShortPathName(pathPtr, nil, 0)
+	if err != nil && err != syscall.ERROR_INSUFFICIENT_BUFFER {
+		// If GetShortPathName fails completely, short paths might be disabled,
+		// but it could also be a permissions issue.
+		return ShortPathStatus{VolumeRoot: volumeRoot, Error: fmt.Sprintf("GetShortPathName failed: %v", err)}
+	}
+
+	if n == 0 {
+		return ShortPathStatus{VolumeRoot: volumeRoot, Error: "GetShortPathName returned zero length"}
+	}
+
+	shortPath := make([]uint16, n)
+	n, err = windows.GetShortPathName(pathPtr, &shortPath[0], uint32(len(shortPath)))
+	if err != nil {
+		return ShortPathStatus{VolumeRoot: volumeRoot, Error: fmt.Sprintf("GetShortPathName failed: %v", err)}
+	}
+
+	shortPathStr := syscall.UTF16ToString(shortPath[:n])
+
+	// If the short path differs from the long path, short names are enabled
+	enabled := !strings.EqualFold(shortPathStr, path)
+
+	return ShortPathStatus{
+		VolumeRoot: volumeRoot,
+		Enabled:    enabled,
+	}
 }
 
 func IsRunningAsAdmin() (bool, error) {

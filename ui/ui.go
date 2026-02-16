@@ -119,7 +119,7 @@ func (ui *UI) Run(w *app.Window) error {
 			case processMonitorState:
 				if ui.processMonitor.Run(gtx, e, ui.findProcessFunc) {
 					ui.processInfo = ui.processMonitor.GetProcessInfo()
-					ui.registryChecker = registry_check.NewRegistryChecker(ui.Logger, w)
+					ui.registryChecker = registry_check.NewRegistryChecker(ui.Logger, w, ui.gw2Directory)
 					ui.currentState = registryCheckState
 				}
 

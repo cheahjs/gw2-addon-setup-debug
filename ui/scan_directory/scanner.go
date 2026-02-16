@@ -103,12 +103,14 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 		if info.IsDir() {
 			return nil
 		}
-		if strings.ToLower(filepath.Ext(path)) == ".dll" {
+		// Match files with extensions starting with .dll (e.g., .dll, .dll_disabled, .dllbak)
+		// This is needed because arcdps uses FindFirstFileW(*.dll) which on short path enabled
+		// filesystems will match *.dll* as short paths truncate extensions to 3 characters
+		if strings.HasPrefix(strings.ToLower(filepath.Ext(path)), ".dll") {
 			dllPaths[path] = struct{}{}
 		}
 		return nil
 	})
-
 	if err != nil {
 		s.logger.Errorw("Failed to walk directory", "error", err)
 		s.status = "Error scanning directory: " + err.Error()
@@ -135,7 +137,7 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 		if err != nil {
 			s.logger.Errorw("Failed to scan DLL", "path", dllPath, "error", err)
 			s.dllInfos = append(s.dllInfos, &utils.DllInfo{
-				Error: err.Error(),
+				Error:    err.Error(),
 				FilePath: dllPath,
 			})
 			continue

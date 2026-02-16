@@ -8,6 +8,7 @@ import (
 	"gioui.org/text"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+	"github.com/cheahjs/gw2-addon-setup-debug/utils"
 	"go.uber.org/zap"
 	"golang.org/x/sys/windows/registry"
 )
@@ -16,6 +17,7 @@ type RegistryInfo struct {
 	SafeDllSearchMode *uint32
 	KnownDlls         map[string]string
 	Gw2RegistryPath   *string
+	ShortPathStatus   *utils.ShortPathStatus
 }
 
 type RegistryChecker struct {
@@ -26,13 +28,15 @@ type RegistryChecker struct {
 	checkStarted   bool
 	checkDone      bool
 	window         *app.Window
+	gw2Directory   string
 }
 
-func NewRegistryChecker(logger *zap.SugaredLogger, window *app.Window) *RegistryChecker {
+func NewRegistryChecker(logger *zap.SugaredLogger, window *app.Window, gw2Directory string) *RegistryChecker {
 	return &RegistryChecker{
 		logger:         logger,
 		continueButton: widget.Clickable{},
 		window:         window,
+		gw2Directory:   gw2Directory,
 	}
 }
 
@@ -89,6 +93,22 @@ func (r *RegistryChecker) Run(gtx layout.Context, e app.FrameEvent) bool {
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if r.checkDone && r.registryInfo != nil && r.registryInfo.Gw2RegistryPath != nil {
 				paragraph := material.Body1(th, fmt.Sprintf("GW2 Registry Path: %s", *r.registryInfo.Gw2RegistryPath))
+				return paragraph.Layout(gtx)
+			}
+			return layout.Dimensions{}
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if r.checkDone && r.registryInfo != nil && r.registryInfo.ShortPathStatus != nil {
+				status := r.registryInfo.ShortPathStatus
+				var statusText string
+				if status.Error != "" {
+					statusText = fmt.Sprintf("8.3 Short Path (%s): Error - %s", status.VolumeRoot, status.Error)
+				} else if status.Enabled {
+					statusText = fmt.Sprintf("8.3 Short Path (%s): Enabled", status.VolumeRoot)
+				} else {
+					statusText = fmt.Sprintf("8.3 Short Path (%s): Disabled", status.VolumeRoot)
+				}
+				paragraph := material.Body1(th, statusText)
 				return paragraph.Layout(gtx)
 			}
 			return layout.Dimensions{}
@@ -159,6 +179,16 @@ func (r *RegistryChecker) checkRegistry() {
 		} else {
 			r.logger.Infow("GW2 Path not found in registry", "error", err)
 		}
+	}
+
+	// Check 8.3 short path status for the GW2 volume
+	if r.gw2Directory != "" {
+		shortPathStatus := utils.GetShortPathStatus(r.gw2Directory)
+		info.ShortPathStatus = &shortPathStatus
+		r.logger.Infow("Checked 8.3 short path status",
+			"volume", shortPathStatus.VolumeRoot,
+			"enabled", shortPathStatus.Enabled,
+			"error", shortPathStatus.Error)
 	}
 
 	r.registryInfo = info
