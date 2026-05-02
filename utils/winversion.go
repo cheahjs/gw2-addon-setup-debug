@@ -86,6 +86,9 @@ func VerQueryValueRoot(block []byte) (VS_FIXEDFILEINFO, error) {
 	if ret == 0 {
 		return VS_FIXEDFILEINFO{}, errors.New("VerQueryValueRoot: verQueryValue failed")
 	}
+	if length == 0 {
+		return VS_FIXEDFILEINFO{}, errors.New("VerQueryValueRoot: empty version info")
+	}
 	start := int(offset) - int(uintptr(blockStart))
 	end := start + int(length)
 	if start < 0 || start >= len(block) || end < start || end > len(block) {
@@ -189,6 +192,9 @@ func queryVersionString(block []byte, path string) (string, error) {
 		return "", errors.New("failed to query version string")
 	}
 
+	if length == 0 {
+		return "", nil
+	}
 	start := int(offset) - int(uintptr(blockStart))
 	end := start + int(length)
 	if start < 0 || start >= len(block) || end < start || end > len(block) {
