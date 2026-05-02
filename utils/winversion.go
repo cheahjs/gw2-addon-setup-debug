@@ -125,15 +125,35 @@ func GetFileVersion(path string) (WinVersion, error) {
 
 // GetFileVersionStrings retrieves string information from the version resource
 func GetFileVersionStrings(path string) (fileDescription, productName, productVersion string, err error) {
+	_, fileDescription, productName, productVersion, err = GetFileVersionAll(path)
+	return
+}
+
+// GetFileVersionAll reads the version resource once and returns both the numeric
+// file version and the string table entries (FileDescription, ProductName,
+// ProductVersion). This is faster than calling GetFileVersion + GetFileVersionStrings
+// separately because the version resource block is only read from disk once.
+func GetFileVersionAll(path string) (version WinVersion, fileDescription, productName, productVersion string, err error) {
 	size := GetFileVersionInfoSize(path)
 	if size <= 0 {
-		return "", "", "", errors.New("GetFileVersionInfoSize failed")
+		err = errors.New("GetFileVersionInfoSize failed")
+		return
 	}
 
 	info := make([]byte, size)
 	ok := GetFileVersionInfo(path, info)
 	if !ok {
-		return "", "", "", errors.New("GetFileVersionInfo failed")
+		err = errors.New("GetFileVersionInfo failed")
+		return
+	}
+
+	// Extract numeric version from VS_FIXEDFILEINFO
+	if fixed, fixedErr := VerQueryValueRoot(info); fixedErr == nil {
+		fv := fixed.FileVersion()
+		version.Major = uint32(fv & 0xFFFF000000000000 >> 48)
+		version.Minor = uint32(fv & 0x0000FFFF00000000 >> 32)
+		version.Patch = uint32(fv & 0x00000000FFFF0000 >> 16)
+		version.Build = uint32(fv & 0x000000000000FFFF)
 	}
 
 	// Query the translation table
@@ -147,13 +167,14 @@ func GetFileVersionStrings(path string) (fileDescription, productName, productVe
 		uintptr(unsafe.Pointer(&length)),
 	)
 	if ret == 0 {
-		return "", "", "", errors.New("failed to query translation table")
+		// No string table, but we may still have the numeric version
+		return
 	}
 
 	start := int(offset) - int(uintptr(blockStart))
 	end := start + int(length)
 	if start < 0 || start >= len(info) || end < start || end > len(info) {
-		return "", "", "", errors.New("invalid translation table offset")
+		return
 	}
 
 	// First translation entry
@@ -172,7 +193,7 @@ func GetFileVersionStrings(path string) (fileDescription, productName, productVe
 	productName, _ = queryVersionString(info, productNamePath)
 	productVersion, _ = queryVersionString(info, productVersionPath)
 
-	return fileDescription, productName, productVersion, nil
+	return
 }
 
 func queryVersionString(block []byte, path string) (string, error) {

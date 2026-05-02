@@ -5,7 +5,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 
@@ -125,12 +124,25 @@ func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 		info.IsQuarantined = isQuarantined
 	}
 
-	// Get file version strings
-	if fileDesc, prodName, prodVer, err := GetFileVersionStrings(dllPath); err == nil {
+	// Get file version info (numeric + strings) in a single read
+	if winVer, fileDesc, prodName, prodVer, err := GetFileVersionAll(dllPath); err == nil {
+		info.FileVersion = winVer
 		info.FileDescription = fileDesc
 		info.ProductName = prodName
 		info.ProductVersion = prodVer
 	}
+
+	// Read the entire DLL into memory once. This buffer is reused for:
+	// - MD5 computation
+	// - Byte pattern searching (Nexus API URL, addonLoader strings, etc.)
+	// This avoids re-opening and re-reading the file multiple times.
+	fileData, err := os.ReadFile(dllPath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to read file %s", dllPath)
+	}
+
+	// Compute MD5 from the in-memory buffer (no extra file read)
+	info.Md5sum = getMD5SumFromData(fileData)
 
 	// Parse PE file
 	peFile, err := peparser.New(dllPath, &peparser.Options{
@@ -161,16 +173,6 @@ func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 		exports[export.Name] = struct{}{}
 	}
 
-	// Get file version if available
-	if winVersion, err := GetFileVersion(dllPath); err == nil {
-		info.FileVersion = winVersion
-	}
-
-	// Get MD5 sum
-	if md5sum, err := getMD5Sum(dllPath); err == nil {
-		info.Md5sum = md5sum
-	}
-
 	// Check if the DLL is a D3D11 shim
 	if isD3D11Shim(exports) {
 		info.IsD3D11Shim = true
@@ -191,13 +193,13 @@ func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 		info.IsArcdpsAddon = true
 	}
 
-	// Check if the DLL is an addon loader shim
-	if isAddonLoaderShim(exports, dllPath) {
+	// Check if the DLL is an addon loader shim (uses in-memory search)
+	if isAddonLoaderShim(exports, fileData) {
 		info.IsAddonLoaderShim = true
 	}
 
-	// Check if the DLL is an addon loader core
-	if isAddonLoaderCore(exports, dllPath) {
+	// Check if the DLL is an addon loader core (uses in-memory search)
+	if isAddonLoaderCore(exports, fileData) {
 		info.IsAddonLoaderCore = true
 	}
 
@@ -206,8 +208,8 @@ func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 		info.IsAddonLoaderAddon = true
 	}
 
-	// Check if the DLL is Nexus
-	if isNexus(exports, dllPath) {
+	// Check if the DLL is Nexus (uses in-memory search)
+	if isNexus(exports, fileData) {
 		info.IsNexus = true
 	}
 
@@ -249,17 +251,13 @@ func isAddonLoaderAddon(exports map[string]struct{}) bool {
 	return exists
 }
 
-func isNexus(exports map[string]struct{}, dllPath string) bool {
+func isNexus(exports map[string]struct{}, fileData []byte) bool {
 	// Check if it is a shim
 	if !isD3D11Shim(exports) {
 		return false
 	}
-	// Check for the Nexus API URL
-	apiUrlPresent, err := searchBytesInLargeFile(dllPath, []byte(nexusApiUrl))
-	if err != nil {
-		return false
-	}
-	return apiUrlPresent
+	// Check for the Nexus API URL in already-loaded file data
+	return bytes.Contains(fileData, []byte(nexusApiUrl))
 }
 
 func isNexusAddon(exports map[string]struct{}) bool {
@@ -277,29 +275,21 @@ func isD3D11Shim(exports map[string]struct{}) bool {
 	return exists
 }
 
-func isAddonLoaderShim(exports map[string]struct{}, dllPath string) bool {
+func isAddonLoaderShim(exports map[string]struct{}, fileData []byte) bool {
 	// The shim must be one of dxgi.dll or d3d11.dll
 	if !isDXGIShim(exports) && !isD3D11Shim(exports) {
 		return false
 	}
-	// Check if there's an addonLoader.dll string
-	loaderStringPresent, err := searchBytesInLargeFile(dllPath, addonLoaderDllUtf16)
-	if err != nil {
-		return false
-	}
-	return loaderStringPresent
+	// Check if there's an addonLoader.dll string in already-loaded file data
+	return bytes.Contains(fileData, addonLoaderDllUtf16)
 }
 
-func isAddonLoaderCore(exports map[string]struct{}, dllPath string) bool {
+func isAddonLoaderCore(exports map[string]struct{}, fileData []byte) bool {
 	if !isDXGIShim(exports) || !isD3D11Shim(exports) {
 		return false
 	}
-	// Check if there's the description string
-	loaderStringPresent, err := searchBytesInLargeFile(dllPath, addonLoaderCoreDescriptionUtf16)
-	if err != nil {
-		return false
-	}
-	return loaderStringPresent
+	// Check if there's the description string in already-loaded file data
+	return bytes.Contains(fileData, addonLoaderCoreDescriptionUtf16)
 }
 
 func isGw2Load(exports map[string]struct{}) bool {
@@ -326,103 +316,22 @@ func asciiToWideString(s string) []byte {
 	return b
 }
 
-// getMD5Sum calculates the MD5 checksum of the given file and returns it as a hexadecimal string.
-func getMD5Sum(filePath string) (string, error) {
-	// Calculate MD5 by copying the file into the hash
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", errors.Wrapf(err, "failed to open file %s", filePath)
-	}
-	defer file.Close()
-	hash := md5.New()
-	_, err = io.Copy(hash, file)
-	if err != nil {
-		return "", err
-	}
-	checksum := hash.Sum(nil)
-	return hex.EncodeToString(checksum), nil
-}
-
-func searchBytesInLargeFile(filename string, pattern []byte) (found bool, err error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return false, err
-	}
-	defer file.Close()
-
-	// Buffer size should be at least as large as the pattern
-	bufSize := max(4096, len(pattern)*2)
-	buf := make([]byte, bufSize)
-
-	position := int64(0)
-	overlap := len(pattern) - 1 // Used for overlapping reads
-
-	// Read the first chunk
-	n, err := file.Read(buf)
-	if err != nil && err != io.EOF {
-		return false, err
-	}
-
-	data := buf[:n]
-
-	for {
-		// Search for pattern in the current chunk
-		index := bytes.Index(data, pattern)
-		if index >= 0 {
-			return true, nil
-		}
-
-		if err == io.EOF {
-			break
-		}
-
-		// Keep part of the old buffer to handle pattern that might span chunks
-		if n <= overlap {
-			break // Not enough data to continue
-		}
-
-		// Move the last 'overlap' bytes to the beginning of the buffer
-		copy(buf[:overlap], buf[n-overlap:n])
-
-		// Read the next chunk after the overlap
-		readPos := overlap
-		n, err = file.Read(buf[readPos:])
-		if err != nil && err != io.EOF {
-			return false, err
-		}
-
-		// Update position and data slice
-		position += int64(readPos)
-		data = buf[:readPos+n]
-	}
-
-	return false, nil
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
+// getMD5SumFromData calculates the MD5 checksum from an in-memory byte slice.
+func getMD5SumFromData(data []byte) string {
+	hash := md5.Sum(data)
+	return hex.EncodeToString(hash[:])
 }
 
 func checkFileQuarantined(filePath string) (bool, error) {
 	// Windows stores Zone.Identifier as an alternate data stream
 	zoneIdentifierPath := filePath + ":Zone.Identifier"
 
-	// Try to open the Zone.Identifier stream
-	file, err := os.Open(zoneIdentifierPath)
+	// Read the contents to check for ZoneId=3 (Internet) or ZoneId=4 (Restricted)
+	content, err := os.ReadFile(zoneIdentifierPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil // File is not quarantined
 		}
-		return false, err
-	}
-	defer file.Close()
-
-	// Read the contents to check for ZoneId=3 (Internet) or ZoneId=4 (Restricted)
-	content, err := io.ReadAll(file)
-	if err != nil {
 		return false, err
 	}
 
