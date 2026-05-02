@@ -92,7 +92,7 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 
 				// Add DLL info
 				summary.WriteString(fmt.Sprintf("- Found %d DLLs in directory\n", len(r.dllInfos)))
-				var arcdpsCount, addonLoaderCount, nexusCount, arcdpsAddonCount, addonLoaderAddonCount, nexusAddonCount, gw2loadCount, gw2loadAddonCount int
+				var arcdpsCount, addonLoaderCount, nexusCount, arcdpsAddonCount, arcdpsLegacyLoaderCount, addonLoaderAddonCount, nexusAddonCount, gw2loadCount, gw2loadAddonCount int
 				for _, dll := range r.dllInfos {
 					if dll.IsArcdps {
 						arcdpsCount++
@@ -105,6 +105,9 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 					}
 					if dll.IsArcdpsAddon {
 						arcdpsAddonCount++
+					}
+					if dll.IsArcdpsLegacyLoader {
+						arcdpsLegacyLoaderCount++
 					}
 					if dll.IsAddonLoaderAddon {
 						addonLoaderAddonCount++
@@ -121,6 +124,7 @@ func (r *Report) Run(gtx layout.Context, e app.FrameEvent) bool {
 				}
 				summary.WriteString(fmt.Sprintf("  - ArcDPS: %d\n", arcdpsCount))
 				summary.WriteString(fmt.Sprintf("  - ArcDPS Addon: %d\n", arcdpsAddonCount))
+				summary.WriteString(fmt.Sprintf("  - ArcDPS Legacy Loader: %d\n", arcdpsLegacyLoaderCount))
 				summary.WriteString(fmt.Sprintf("  - AddonLoader: %d\n", addonLoaderCount))
 				summary.WriteString(fmt.Sprintf("  - AddonLoader Addon: %d\n", addonLoaderAddonCount))
 				summary.WriteString(fmt.Sprintf("  - Nexus: %d\n", nexusCount))
@@ -424,6 +428,9 @@ func (r *Report) saveReport() {
 		}
 		if r.dllInfos[i].IsNexusAddon != r.dllInfos[j].IsNexusAddon {
 			return r.dllInfos[i].IsNexusAddon
+		}
+		if r.dllInfos[i].IsArcdpsLegacyLoader != r.dllInfos[j].IsArcdpsLegacyLoader {
+			return r.dllInfos[i].IsArcdpsLegacyLoader
 		}
 		if r.dllInfos[i].IsArcdpsAddon != r.dllInfos[j].IsArcdpsAddon {
 			return r.dllInfos[i].IsArcdpsAddon

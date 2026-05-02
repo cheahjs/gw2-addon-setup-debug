@@ -22,6 +22,7 @@ const (
 	LoadTypeAddonLoaderCore                  // Loaded as addon loader core
 	LoadTypeNexusAddon                       // Loaded as a nexus addon
 	LoadTypeGw2LoadAddon                     // Loaded as a GW2Load addon
+	LoadTypeArcdpsLegacyAddon                // Loaded as a legacy arcdps addon by arcdps-legacy-loader
 )
 
 func ResolveDllLoadResolution(dllInfos []*DllInfo, gw2Path string) []LoadOrder {
@@ -94,6 +95,16 @@ func processLoadChain(info *DllInfo, dllMap map[string]*DllInfo, gw2Path string,
 				if dllInfo.IsArcdpsAddon && strings.EqualFold(filepath.Dir(dllPath), searchDir) {
 					processLoadChain(dllInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeArcdpsAddon, currentLoadOrder)
 				}
+			}
+		}
+	}
+
+	if info.IsArcdpsLegacyLoader && loadType == LoadTypeArcdpsAddon {
+		// The arcdps legacy loader loads legacy arcdps addons from addons/arcdps/legacy/*.dll
+		legacyDir := filepath.Join(gw2Path, "addons", "arcdps", "legacy")
+		for dllPath, dllInfo := range dllMap {
+			if dllInfo.IsArcdpsAddon && strings.EqualFold(filepath.Dir(dllPath), legacyDir) {
+				processLoadChain(dllInfo, dllMap, gw2Path, loadOrder, processed, LoadTypeArcdpsLegacyAddon, currentLoadOrder)
 			}
 		}
 	}
@@ -189,6 +200,8 @@ func getDllSource(loadType LoadType) string {
 		return "loaded by nexus"
 	case LoadTypeGw2LoadAddon:
 		return "loaded by gw2load"
+	case LoadTypeArcdpsLegacyAddon:
+		return "loaded by arcdps legacy loader"
 	case LoadTypeAddonLoaderCore:
 		return "loaded by addon loader core"
 	default:

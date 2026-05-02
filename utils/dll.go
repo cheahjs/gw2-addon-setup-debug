@@ -23,37 +23,39 @@ var (
 )
 
 type DllInfo struct {
-	FilePath           string
-	Md5sum             string
-	IsArcdps           bool
-	IsArcdpsAddon      bool
-	IsAddonLoaderShim  bool
-	IsAddonLoaderCore  bool
-	IsAddonLoaderAddon bool
-	IsNexus            bool
-	IsNexusAddon       bool
-	IsGw2Load          bool
-	IsGw2LoadAddon     bool
-	IsD3D11Shim        bool
-	IsDXGIShim         bool
-	IsQuarantined      bool
-	IsReshade          bool
-	FileVersion        WinVersion
-	FileDescription    string
-	ProductName        string
-	ProductVersion     string
-	Error              string
+	FilePath             string
+	Md5sum               string
+	IsArcdps             bool
+	IsArcdpsAddon        bool
+	IsArcdpsLegacyLoader bool
+	IsAddonLoaderShim    bool
+	IsAddonLoaderCore    bool
+	IsAddonLoaderAddon   bool
+	IsNexus              bool
+	IsNexusAddon         bool
+	IsGw2Load            bool
+	IsGw2LoadAddon       bool
+	IsD3D11Shim          bool
+	IsDXGIShim           bool
+	IsQuarantined        bool
+	IsReshade            bool
+	FileVersion          WinVersion
+	FileDescription      string
+	ProductName          string
+	ProductVersion       string
+	Error                string
 }
 
 func (info *DllInfo) String() string {
 	return fmt.Sprintf(
-		"md5sum: %v, fileDesc: %v, productName: %v, productVer: %v, isArcdps: %v, isArcdpsAddon: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, isGw2Load: %v, isGw2LoadAddon: %v, isQuarantined: %v, isReshade: %v, fileVersion: %v",
+		"md5sum: %v, fileDesc: %v, productName: %v, productVer: %v, isArcdps: %v, isArcdpsAddon: %v, isArcdpsLegacyLoader: %v, isAddonLoaderShim: %v, isAddonLoaderCore: %v, isAddonLoaderAddon: %v, isNexus: %v, isNexusAddon: %v, isD3D11Shim: %v, isDXGIShim: %v, isGw2Load: %v, isGw2LoadAddon: %v, isQuarantined: %v, isReshade: %v, fileVersion: %v",
 		info.Md5sum,
 		info.FileDescription,
 		info.ProductName,
 		info.ProductVersion,
 		info.IsArcdps,
 		info.IsArcdpsAddon,
+		info.IsArcdpsLegacyLoader,
 		info.IsAddonLoaderShim,
 		info.IsAddonLoaderCore,
 		info.IsAddonLoaderAddon,
@@ -97,6 +99,9 @@ func (info *DllInfo) Flags() string {
 	}
 	if info.IsArcdpsAddon {
 		flags.WriteString("[ArcdpsAddon] ")
+	}
+	if info.IsArcdpsLegacyLoader {
+		flags.WriteString("[ArcdpsLegacyLoader] ")
 	}
 	if info.IsGw2Load {
 		flags.WriteString("[GW2Load] ")
@@ -191,6 +196,11 @@ func ParseDll(logger *zap.SugaredLogger, dllPath string) (*DllInfo, error) {
 	// Check if the DLL is an arcdps addon
 	if isArcdpsAddon(exports) {
 		info.IsArcdpsAddon = true
+	}
+
+	// Check if the DLL is the arcdps legacy loader (itself an arcdps addon)
+	if info.IsArcdpsAddon && info.ProductName == "arcdps_legacy_loader" {
+		info.IsArcdpsLegacyLoader = true
 	}
 
 	// Check if the DLL is an addon loader shim (uses in-memory search)
