@@ -5,7 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"gioui.org/app"
 	"gioui.org/layout"
@@ -118,41 +121,94 @@ func (s *Scanner) scanDlls(scanDll func(string) (*utils.DllInfo, error)) {
 	}
 
 	// Scan each DLL
-	s.status = fmt.Sprintf("Found %d DLLs, analyzing...", len(dllPaths))
+	total := len(dllPaths)
+	s.status = fmt.Sprintf("Found %d DLLs, analyzing...", total)
 	s.window.Invalidate()
 
 	// Map the DLL paths to a slice
-	dllPathsSlice := make([]string, 0, len(dllPaths))
+	dllPathsSlice := make([]string, 0, total)
 	for path := range dllPaths {
 		dllPathsSlice = append(dllPathsSlice, path)
 	}
 
-	for i, dllPath := range dllPathsSlice {
-		s.status = fmt.Sprintf("Analyzing DLL %d/%d: %s", i+1, len(dllPathsSlice), filepath.Base(dllPath))
-		s.window.Invalidate()
+	// Scan DLLs in parallel using a worker pool
+	numWorkers := runtime.GOMAXPROCS(0)
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
 
-		info, err := scanDll(dllPath)
-		if err != nil {
-			s.logger.Errorw("Failed to scan DLL", "path", dllPath, "error", err)
-			s.dllInfos = append(s.dllInfos, &utils.DllInfo{
-				Error: err.Error(),
-				FilePath: dllPath,
-			})
-			continue
-		}
+	type scanResult struct {
+		index int
+		info  *utils.DllInfo
+	}
 
-		s.dllInfos = append(s.dllInfos, info)
-		s.logger.Infow("Scanned DLL",
-			"path", dllPath,
-			"info", info)
-		// Force garbage collection to prevent memory leak
-		runtime.GC()
+	results := make([]scanResult, 0, total)
+	resultCh := make(chan scanResult, total)
+	jobs := make(chan int, total)
+	var wg sync.WaitGroup
+	var completed int64
+
+	// Start workers
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				dllPath := dllPathsSlice[i]
+				done := atomic.AddInt64(&completed, 1)
+				s.status = fmt.Sprintf("Analyzing DLL %d/%d: %s", done, total, filepath.Base(dllPath))
+				s.window.Invalidate()
+
+				info, err := scanDll(dllPath)
+				if err != nil {
+					s.logger.Errorw("Failed to scan DLL", "path", dllPath, "error", err)
+					resultCh <- scanResult{i, &utils.DllInfo{
+						Error:    err.Error(),
+						FilePath: dllPath,
+					}}
+					continue
+				}
+
+				s.logger.Infow("Scanned DLL",
+					"path", dllPath,
+					"info", info)
+				resultCh <- scanResult{i, info}
+			}
+		}()
+	}
+
+	// Send jobs
+	for i := range dllPathsSlice {
+		jobs <- i
+	}
+	close(jobs)
+
+	// Wait for all workers and close results channel
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	// Collect results
+	for r := range resultCh {
+		results = append(results, r)
+	}
+
+	// Sort by original index to maintain deterministic order
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].index < results[j].index
+	})
+
+	s.dllInfos = make([]*utils.DllInfo, len(results))
+	for i, r := range results {
+		s.dllInfos[i] = r.info
 	}
 
 	s.status = fmt.Sprintf("Completed! Analyzed %d DLLs", len(s.dllInfos))
 	s.scanningDone = true
 	s.window.Invalidate()
 }
+
 
 func (s *Scanner) GetDllInfos() []*utils.DllInfo {
 	return s.dllInfos
