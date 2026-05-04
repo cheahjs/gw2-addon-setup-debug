@@ -16,16 +16,18 @@ import (
 )
 
 type Directory struct {
-	logger            *zap.SugaredLogger
-	directory         string
-	selectButton      widget.Clickable
-	continueButton    widget.Clickable
-	errorMessage      string
-	isValid           bool
-	fileExplorer      *explorer.Explorer
-	includeDirListing widget.Bool
-	includeLogs       widget.Bool
-	hasArcdpsLogs     bool
+	logger             *zap.SugaredLogger
+	directory          string
+	selectButton       widget.Clickable
+	continueButton     widget.Clickable
+	errorMessage       string
+	isValid            bool
+	fileExplorer       *explorer.Explorer
+	includeDirListing  widget.Bool
+	includeArcdpsLogs  widget.Bool
+	includeNexusLog    widget.Bool
+	hasArcdpsLogs      bool
+	hasNexusLog        bool
 }
 
 func NewDirectory(logger *zap.SugaredLogger) *Directory {
@@ -34,11 +36,12 @@ func NewDirectory(logger *zap.SugaredLogger) *Directory {
 		selectButton:      widget.Clickable{},
 		continueButton:    widget.Clickable{},
 		includeDirListing: widget.Bool{Value: true}, // Include directory listing by default
-		includeLogs:       widget.Bool{Value: true}, // Include logs by default if they exist
+		includeArcdpsLogs: widget.Bool{Value: true}, // Include arcdps logs by default if they exist
+		includeNexusLog:   widget.Bool{Value: true}, // Include Nexus log by default if it exists
 	}
 }
 
-func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bool, string, bool, bool) {
+func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bool, string, bool, bool, bool) {
 	th := material.NewTheme()
 
 	if d.fileExplorer == nil {
@@ -79,7 +82,7 @@ func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bo
 
 	// Continue button clicked and directory is valid
 	if d.continueButton.Clicked(gtx) && d.isValid {
-		return true, d.directory, d.includeDirListing.Value, d.hasArcdpsLogs && d.includeLogs.Value
+		return true, d.directory, d.includeDirListing.Value, d.hasArcdpsLogs && d.includeArcdpsLogs.Value, d.hasNexusLog && d.includeNexusLog.Value
 	}
 
 	layout.Flex{
@@ -135,7 +138,18 @@ func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bo
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if d.isValid && d.hasArcdpsLogs {
 				// Add checkbox for arcdps logs
-				checkbox := material.CheckBox(th, &d.includeLogs, "Include arcdps logs in report")
+				checkbox := material.CheckBox(th, &d.includeArcdpsLogs, "Include arcdps logs in report")
+				return checkbox.Layout(gtx)
+			}
+			return layout.Dimensions{}
+		}),
+		layout.Rigid(
+			layout.Spacer{Height: 10}.Layout,
+		),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if d.isValid && d.hasNexusLog {
+				// Add checkbox for Nexus log
+				checkbox := material.CheckBox(th, &d.includeNexusLog, "Include Nexus log in report")
 				return checkbox.Layout(gtx)
 			}
 			return layout.Dimensions{}
@@ -151,7 +165,7 @@ func (d *Directory) Run(w *app.Window, gtx layout.Context, e app.FrameEvent) (bo
 			return layout.Dimensions{}
 		}))
 
-	return false, "", false, false
+	return false, "", false, false, false
 }
 
 func (d *Directory) validateDirectory() {
@@ -179,6 +193,13 @@ func (d *Directory) validateDirectory() {
 	d.hasArcdpsLogs = err1 == nil || err2 == nil
 	if d.hasArcdpsLogs {
 		d.logger.Infow("Found arcdps logs", "path", d.directory)
+	}
+
+	// Check for Nexus log
+	_, err = os.Stat(path.Join(d.directory, "addons/Nexus/Nexus.log"))
+	d.hasNexusLog = err == nil
+	if d.hasNexusLog {
+		d.logger.Infow("Found Nexus log", "path", d.directory)
 	}
 
 	d.errorMessage = ""

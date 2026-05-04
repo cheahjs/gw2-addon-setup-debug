@@ -27,7 +27,8 @@ type Report struct {
 	exitButton        widget.Clickable
 	gw2Dir            string
 	includeDirListing bool
-	includeLogs       bool
+	includeArcdpsLogs bool
+	includeNexusLog   bool
 	dllInfos          []*utils.DllInfo
 	processInfo       *utils.ProcessInfo
 	registryInfo      *registry_check.RegistryInfo
@@ -37,14 +38,15 @@ type Report struct {
 	list              *widget.List
 }
 
-func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo, registryInfo *registry_check.RegistryInfo, includeDirListing bool, includeLogs bool) *Report {
+func NewReport(logger *zap.SugaredLogger, gw2Dir string, dllInfos []*utils.DllInfo, processInfo *utils.ProcessInfo, registryInfo *registry_check.RegistryInfo, includeDirListing bool, includeArcdpsLogs bool, includeNexusLog bool) *Report {
 	return &Report{
 		logger:            logger,
 		saveButton:        widget.Clickable{},
 		exitButton:        widget.Clickable{},
 		gw2Dir:            gw2Dir,
 		includeDirListing: includeDirListing,
-		includeLogs:       includeLogs,
+		includeArcdpsLogs: includeArcdpsLogs,
+		includeNexusLog:   includeNexusLog,
 		dllInfos:          dllInfos,
 		processInfo:       processInfo,
 		registryInfo:      registryInfo,
@@ -565,7 +567,7 @@ func (r *Report) saveReport() {
 	}
 
 	// Add this before the directory listing section in generateReport
-	if r.includeLogs {
+	if r.includeArcdpsLogs {
 		// Check for arcdps logs
 		arcdpsLogPath := filepath.Join(r.gw2Dir, "addons/arcdps/arcdps.log")
 		arcdpsCrashLogPath := filepath.Join(r.gw2Dir, "addons/arcdps/arcdps_lastcrash.log")
@@ -588,6 +590,21 @@ func (r *Report) saveReport() {
 			report.WriteString("\n\n")
 		} else {
 			report.WriteString(fmt.Sprintf("Error reading arcdps_lastcrash.log: %s\n\n", err.Error()))
+		}
+	}
+
+	if r.includeNexusLog {
+		nexusLogPath := filepath.Join(r.gw2Dir, "addons/Nexus/Nexus.log")
+
+		report.WriteString("\n=== Nexus Logs ===\n\n")
+
+		// Try to read Nexus.log
+		if logContent, err := os.ReadFile(nexusLogPath); err == nil {
+			report.WriteString("=== Nexus.log ===\n")
+			report.WriteString(string(logContent))
+			report.WriteString("\n\n")
+		} else {
+			report.WriteString(fmt.Sprintf("Error reading Nexus.log: %s\n\n", err.Error()))
 		}
 	}
 
