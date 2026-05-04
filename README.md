@@ -36,6 +36,7 @@ Collects the following information:
    1. The command-line arguments
    1. The currently loaded modules
 1. `arcdps.log` and `arcdps_lastcrash.log` if present
+1. `Nexus.log` if present
 
 ## Screenshots
 
